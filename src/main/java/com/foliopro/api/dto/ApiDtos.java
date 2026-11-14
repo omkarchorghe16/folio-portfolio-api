@@ -29,9 +29,4 @@ public final class ApiDtos {
     public record PreferencesRequest(@NotNull List<@NotBlank String> favoriteWatchlists,
       @NotNull Map<String,List<@NotBlank String>> favoriteSymbols, @NotEmpty List<@NotBlank String> watchlistColumns) {}
     public record PreferencesResponse(List<String> favoriteWatchlists, Map<String,List<String>> favoriteSymbols, List<String> watchlistColumns) {}
-    public record InstrumentResponse(String symbol, String name, String market, String currency, String assetType, String sector,
-      BigDecimal price, BigDecimal change, Map<String,Object> metrics, boolean sampleData) {}
-    public record DashboardResponse(Map<String,Object> summary, List<Map<String,Object>> growthHistory,
-      List<Map<String,Object>> usAllocation, List<Map<String,Object>> indiaAllocation,
-      List<Map<String,Object>> portfolios, List<Map<String,Object>> topGainers, List<Map<String,Object>> topLosers, boolean sampleData) {}
 }

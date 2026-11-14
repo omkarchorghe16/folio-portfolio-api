@@ -6,15 +6,15 @@ Java 21 / Spring Boot REST backend for the Angular Folio Pro prototype. The fron
 
 The Angular app is a prototype with synchronous mock methods in `src/app/core/services/wealth.service.ts`, typed in `src/app/core/models/wealth.models.ts`. Dashboard, portfolio, stocks, IPO, crypto, profile and settings screens currently use mock data. Watchlists uses `localStorage` for list edits/import, favorites, selected columns and order. Angular allows blank login credentials and README says auth is not integrated.
 
-Contract decisions: backend CRUD uses database numeric IDs (replace sample/custom string watchlist IDs in the Angular model); page indices are zero-based, page size defaults to 15 and is capped at 100; watchlist bulk-add is atomic and duplicate symbols fail with 400; absent market/fundamental/technical data stays null; manual assets must not be assigned fabricated prices. Dashboard and current instrument lookup fixtures are explicitly tagged sample data. Existing UI expects numeric `price` and `change`; treat these values as nullable in the Angular integration model rather than display `0` as a real quote. No auth is implemented: one development workspace is shared, so this service is **development-only** and must not be publicly exposed. Blank login is not interpreted as backend authentication. Add Spring Security and real user ownership before production.
+Contract decisions: backend CRUD uses database numeric IDs (replace sample/custom string watchlist IDs in the Angular model); page indices are zero-based, page size defaults to 15 and is capped at 100; watchlist bulk-add is atomic and duplicate symbols fail with 400; absent market/fundamental/technical data stays null; manual assets must not be assigned fabricated prices. Existing UI expects numeric `price` and `change`; treat these values as nullable in the Angular integration model rather than display `0` as a real quote. No auth is implemented: one development workspace is shared, so this service is **development-only** and must not be publicly exposed. Blank login is not interpreted as backend authentication. Add Spring Security and real user ownership before production.
 
 ## Endpoints
 
 All paths use `/api/v1`. OpenAPI is available at `/v3/api-docs`; Swagger UI at `/swagger-ui.html`.
+See [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) for a per-endpoint reference, including the database tables and queries each endpoint uses.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/dashboard` | Summary, growth history, US/India allocation, portfolio summaries, gainers/losers (`sampleData: true`) |
 | GET, POST | `/portfolios` | Paginated list / create (page=0,size=15) |
 | GET, PUT, DELETE | `/portfolios/{id}` | Read, replace portfolio and holdings, delete |
 | GET | `/watchlists?page=0&size=15&market=US\|India` | Paginated watchlists with every ticker nested in each watchlist's `items` array; omit market for both |
@@ -24,7 +24,6 @@ All paths use `/api/v1`. OpenAPI is available at `/v3/api-docs`; Swagger UI at `
 | POST | `/watchlists/{id}/items` | Atomic bulk-add `{items:[...]}` |
 | PUT, DELETE | `/watchlists/{id}/items/{symbol}` | Update or remove one symbol |
 | GET, PUT | `/preferences` | Favorite lists/symbols and ordered visible columns |
-| GET | `/instruments?q=apple&market=US` | Sample-only ticker/name lookup |
 
 Watchlist items contain `symbol`, `name`, and `isFavorite` (false by default). These items are only for symbol tracking/favorites; market quote and technical data are not stored in these tables. USA items are stored in `watchlist_items_usa` and reference `watchlists_usa`; India items are stored in `watchlist_items_india` and reference `watchlists_india`. Portfolio holdings include `symbol`, `instrument`, `quantity`, `averageCost`, `marketValue`, and `currency`.
 
@@ -98,7 +97,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 mvn test
 ```
 
-Flyway applies `src/main/resources/db/migration`. Optional `dev` profile seeds two sample watchlists only when watchlists are empty; it inserts no holdings and never claims live prices. Keep secrets in environment/secret manager; no provider credentials are configured. Market data is behind `SampleMarketDataProvider`, replaceable by a future provider adapter, and demo fixtures are not real recommendations or current quotes.
+Flyway applies `src/main/resources/db/migration`. Optional `dev` profile seeds two sample watchlists only when watchlists are empty; it inserts no holdings and never claims live prices. Keep secrets in environment/secret manager; no provider credentials are configured. No market-data provider is integrated; the API does not serve prices or quotes.
 
 ## Docker Compose
 
@@ -155,7 +154,7 @@ news-scheduler jobs, notification channels, or provider credentials into this ap
 
 ## Angular integration guide
 
-Replace synchronous `WealthService` mock methods with `HttpClient` methods (configured with a base URL from Angular environment config, no credentials baked into source). Map `getMetricCards/getCountryPortfolios/getPortfolioOverviews/getTopGainers/getTopLosers` to `GET /api/v1/dashboard`; `getWatchlists(market)` to paginated `GET /api/v1/watchlists`; create/rename/delete lists via POST/PATCH/DELETE; staged additions/import CSV can call bulk POST; item edits/removal use PUT/DELETE; symbol suggestions use `/instruments?q=...&market=...`; portfolio CRUD and holdings use `/portfolios`; settings persist to `/preferences`.
+Replace synchronous `WealthService` mock methods with `HttpClient` methods (configured with a base URL from Angular environment config, no credentials baked into source). Map `getWatchlists(market)` to paginated `GET /api/v1/watchlists`; create/rename/delete lists via POST/PATCH/DELETE; staged additions/import CSV can call bulk POST; item edits/removal use PUT/DELETE; portfolio CRUD and holdings use `/portfolios`; settings persist to `/preferences`.
 
 Move browser keys `folio-pro.favorite-watchlists`, `folio-pro.favorite-symbols`, and `folio-pro.watchlist-columns` to `GET/PUT /preferences`. Move `folio-pro.watchlist-data` to watchlist/item endpoints. CSV parsing/export can remain client-side, with parsed items sent in a bulk add request. `WatchlistsComponent` needs to consume server pagination (currently it slices in-memory data), accept numeric IDs, and render null prices/change/metrics as unavailable (not zero). Login/register and blank-credential demo entry should remain frontend-only until a separately defined secure authentication/token/ownership contract is implemented.
 

@@ -8,13 +8,12 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
 
 @RestController @RequestMapping("/api/v1") @Validated
-@Tag(name = "Folio Pro", description = "Portfolio, watchlist, preferences, instrument, and dashboard endpoints")
+@Tag(name = "Folio Pro", description = "Portfolio and preferences endpoints")
 public class ApiController {
- private final FolioService service; private final com.foliopro.api.service.SampleMarketDataProvider marketData;
- public ApiController(FolioService s,com.foliopro.api.service.SampleMarketDataProvider m){service=s;marketData=m;}
+ private final FolioService service;
+ public ApiController(FolioService s){service=s;}
  @Operation(summary="List portfolios",description="Returns portfolios using zero-based pagination; page size is limited to 100.")
  @GetMapping("/portfolios") public PageResponse<PortfolioResponse> portfolios(@RequestParam(defaultValue="0") @Min(0) int page,@RequestParam(defaultValue="15") @Min(1) @Max(100) int size){return service.listPortfolios(page,size);}
  @Operation(summary="Create a portfolio",description="Creates a portfolio and its optional holdings.")
@@ -29,8 +28,4 @@ public class ApiController {
  @GetMapping("/preferences") public PreferencesResponse preferences(){return service.getPreferences();}
  @Operation(summary="Save preferences",description="Replaces favorite watchlists, favorite symbols, and visible watchlist columns.")
  @PutMapping("/preferences") public PreferencesResponse savePreferences(@Valid @RequestBody PreferencesRequest r){return service.savePreferences(r);}
- @Operation(summary="Search instruments",description="Searches the sample instrument catalog. Returned prices and instrument data are illustrative.")
- @GetMapping("/instruments") public List<InstrumentResponse> instruments(@RequestParam(required=false) @Size(max=80) String q,@RequestParam(required=false) @Pattern(regexp="US|India") String market){return marketData.search(q,market);}
- @Operation(summary="Get dashboard data",description="Returns dashboard summary and sample market data.")
- @GetMapping("/dashboard") public DashboardResponse dashboard(){return DashboardSamples.response();}
 }

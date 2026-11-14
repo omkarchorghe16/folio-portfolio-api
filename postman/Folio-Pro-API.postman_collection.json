@@ -7,39 +7,6 @@
   },
   "item": [
     {
-      "name": "Dashboard and instruments",
-      "item": [
-        {
-          "name": "Get dashboard",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/dashboard",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "dashboard"]
-            }
-          }
-        },
-        {
-          "name": "Search instruments",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/instruments?q=AAPL&market=US",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "instruments"],
-              "query": [
-                {"key": "q", "value": "AAPL"},
-                {"key": "market", "value": "US"}
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "Portfolios",
       "item": [
         {

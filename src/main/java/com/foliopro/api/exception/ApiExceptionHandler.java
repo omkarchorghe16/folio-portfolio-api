@@ -1,6 +1,7 @@
 package com.foliopro.api.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -42,6 +43,15 @@ public class ApiExceptionHandler {
         Map<String, String> details = new LinkedHashMap<>();
         exception.getBindingResult().getFieldErrors()
                 .forEach(error -> details.put(error.getField(), error.getDefaultMessage()));
+        return response(HttpStatus.BAD_REQUEST, "Request validation failed", details);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    ResponseEntity<ApiError> constraintViolation(ConstraintViolationException exception, HttpServletRequest request) {
+        logClientFailure(HttpStatus.BAD_REQUEST.value(), "validation", request);
+        Map<String, String> details = new LinkedHashMap<>();
+        exception.getConstraintViolations()
+                .forEach(violation -> details.put(violation.getPropertyPath().toString(), violation.getMessage()));
         return response(HttpStatus.BAD_REQUEST, "Request validation failed", details);
     }
 

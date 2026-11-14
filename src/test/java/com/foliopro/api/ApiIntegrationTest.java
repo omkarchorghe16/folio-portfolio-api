@@ -112,5 +112,4 @@ class ApiIntegrationTest {
    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Duplicate symbol")));
   org.junit.jupiter.api.Assertions.assertEquals(before,watchlists.count());
  }
- @Test void returnsSampleDashboard(){try{mvc.perform(get("/api/v1/dashboard")).andExpect(status().isOk()).andExpect(jsonPath("$.sampleData").value(true)).andExpect(jsonPath("$.usAllocation").isArray());}catch(Exception e){throw new RuntimeException(e);}}
 }

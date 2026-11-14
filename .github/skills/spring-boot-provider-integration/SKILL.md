@@ -5,8 +5,8 @@ description: Add an external market-data provider integration with typed parsing
 
 # External provider integration workflow
 
-Use this skill only when an external market-data provider is explicitly introduced. The current
-`SampleMarketDataProvider` is fixture-backed and does not make live provider requests.
+Use this skill only when an external market-data provider is explicitly introduced. No market-data
+provider is currently integrated.
 
 ## Project conventions
 
