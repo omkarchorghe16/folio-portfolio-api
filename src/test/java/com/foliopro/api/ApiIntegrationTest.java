@@ -135,4 +135,32 @@ class ApiIntegrationTest {
     .andExpect(status().isBadRequest());
   }
  }
+ @Test void listsFavoriteWatchlistsFirstForUsaAndIndia() throws Exception {
+  for(String market:new String[]{"US","India"}){
+   long first=0,second=0;
+   for(int n=0;n<2;n++){
+    String created=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+      .content("{\"name\":\"Order "+market+" "+n+"\",\"market\":\""+market+"\"}"))
+     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    long id=mapper.readTree(created).get("id").asLong();
+    if(n==0)first=id;else second=id;
+   }
+   // Star only the newer list: it must now be listed before the older, unstarred one.
+   mvc.perform(patch("/api/v1/watchlists/"+second+"/favorite").contentType(MediaType.APPLICATION_JSON).content("{\"isFavorite\":true}"))
+    .andExpect(status().isOk());
+   var content=mapper.readTree(mvc.perform(get("/api/v1/watchlists?market="+market+"&page=0&size=100"))
+     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("content");
+   boolean seenNonFavorite=false; long previousId=-1; boolean previousFavorite=true; int firstIndex=-1,secondIndex=-1;
+   for(int i=0;i<content.size();i++){
+    var w=content.get(i); boolean fav=w.get("isFavorite").asBoolean(); long id=w.get("id").asLong();
+    org.junit.jupiter.api.Assertions.assertEquals(market,w.get("market").asText());
+    if(fav) org.junit.jupiter.api.Assertions.assertFalse(seenNonFavorite,"favorite listed after a non-favorite");
+    else seenNonFavorite=true;
+    if(fav==previousFavorite) org.junit.jupiter.api.Assertions.assertTrue(id>previousId,"ids not ascending within a group");
+    previousId=id; previousFavorite=fav;
+    if(id==first)firstIndex=i; if(id==second)secondIndex=i;
+   }
+   org.junit.jupiter.api.Assertions.assertTrue(secondIndex>=0&&firstIndex>secondIndex);
+  }
+ }
 }

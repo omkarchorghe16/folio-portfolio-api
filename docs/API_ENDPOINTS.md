@@ -99,13 +99,13 @@ Shared DTOs (`ApiDtos`):
 | `size` | int | 15 | 1–100 |
 
 Pagination applies to **watchlists**. Each watchlist in the page includes **all** of its items.
-Sorted by `id` ascending.
+Sorted with favorites first (`is_favorite` true before false), then by `id` ascending within each group.
 
 **Tables read:** `watchlists_usa`, `watchlists_india`, `watchlist_items_usa`, `watchlist_items_india`.
 
 **Query sequence** (`FolioService.listWatchlists`, one read-only transaction):
 
-1. **Page of watchlists:** UNION ALL over both watchlist tables, `order by id`, `offset/fetch first`.
+1. **Page of watchlists:** UNION ALL over both watchlist tables, `order by is_favorite desc, id`, `offset/fetch first`.
    If `market` is given, a `where market = ?` filter is applied to the union.
 2. **Count** for `totalElements`/`totalPages`: `select count(*)` over the same UNION ALL.
    Spring Data skips this on the last partial page.
