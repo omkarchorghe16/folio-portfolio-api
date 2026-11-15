@@ -4,7 +4,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 public final class ApiDtos {
     private ApiDtos() {}
@@ -27,7 +26,4 @@ public final class ApiDtos {
     public record WatchlistFavoriteRequest(@NotNull Boolean isFavorite) {}
     public record WatchlistImportResponse(int watchlistsCreated, int itemsCreated, List<String> watchlistNames) {}
     public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages) {}
-    public record PreferencesRequest(@NotNull List<@NotBlank String> favoriteWatchlists,
-      @NotNull Map<String,List<@NotBlank String>> favoriteSymbols, @NotEmpty List<@NotBlank String> watchlistColumns) {}
-    public record PreferencesResponse(List<String> favoriteWatchlists, Map<String,List<String>> favoriteSymbols, List<String> watchlistColumns) {}
 }

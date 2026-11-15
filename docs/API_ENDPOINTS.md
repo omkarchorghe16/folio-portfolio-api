@@ -11,7 +11,7 @@ issues, captured with `spring.jpa.show-sql=true`).
 
 ## 1. Database overview
 
-Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V4). Hibernate runs with
+Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V8). Hibernate runs with
 `ddl-auto: validate`, so entities must match these tables exactly.
 
 | Table | Purpose | Key columns | Entity |
@@ -22,7 +22,9 @@ Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V4). Hibern
 | `watchlist_items_india` | Tickers in India watchlists | same shape, FK → `watchlists_india.id` | `IndiaWatchlistItemEntity` |
 | `portfolios` | Portfolios | `id`, `name`, `country`, `currency`, `asset_type`, `created_at`, `updated_at` | `PortfolioEntity` |
 | `holdings` | Positions in a portfolio | `portfolio_id` → `portfolios.id` ON DELETE CASCADE, `symbol`, `instrument_name`, `quantity`, `average_cost`, `market_value`, `currency`; UNIQUE(`portfolio_id`,`symbol`) | `HoldingEntity` |
-| `user_preferences` | UI preferences (single dev user `development`) | `user_key` UNIQUE, `favorite_watchlists`, `favorite_symbols`, `watchlist_columns` (JSON stored as TEXT) | `UserPreferencesEntity` |
+| `watchlist_column_preferences` | Each user's watchlist table columns and their order | PK (`user_id`,`column_key`), `display_order` ≥ 1, UNIQUE(`user_id`,`display_order`), `created_at`, `updated_at` | `WatchlistColumnPreferenceEntity` |
+
+The legacy `user_preferences` table and its `/api/v1/preferences` endpoint were removed (V8).
 
 `created_at` on the two watchlist tables is filled by the DB default and is not mapped by the entity.
 
@@ -83,7 +85,8 @@ Shared DTOs (`ApiDtos`):
 ```jsonc
 // WatchlistResponse
 { "id": 1, "name": "Growth picks", "market": "US", "currency": "USD",
-  "userId": 1,                     // US only; omitted for India (null fields are not serialized)
+  "userId": 1,                     // owner; defaults to 1 for US and India (no auth yet)
+  "isFavorite": false,             // starred in the UI; favorites are listed first
   "items": [ { "id": 10, "symbol": "NVDA", "name": "NVIDIA Corporation", "isFavorite": true } ] }
 
 // PageResponse<T>
@@ -132,7 +135,7 @@ Body (`WatchlistRequest`):
 |---|---|
 | `name` | required, ≤ 40 chars, trimmed |
 | `market` | required, `US` or `India` |
-| `userId` | optional, positive. Used only for US (defaults to 1). Ignored for India |
+| `userId` | optional, positive. Stored for US and India (defaults to 1) |
 
 **Tables:** `select next value for watchlists_id_seq`, then INSERT into `watchlists_usa` **or**
 `watchlists_india`, then a SELECT on the matching items table to build the (empty) `items` array.
@@ -232,7 +235,7 @@ matching items table. Errors: 404.
 | Query param | Default | Rules |
 |---|---|---|
 | `market` | `USA` | `USA`, `US`, or `India` (case-insensitive) |
-| `userId` | 1 | positive. Stored on `watchlists_usa.user_id`. Ignored for India |
+| `userId` | 1 | positive. Stored on `watchlists_usa.user_id` or `watchlists_india.user_id` |
 
 CSV format is column-oriented. Row 1 holds watchlist names, and each column below it lists that watchlist's symbols:
 
@@ -245,7 +248,7 @@ NVDA,
 
 Validation runs on the whole file before anything is saved:
 * names are 1–40 chars and unique within the file (case-insensitive)
-* symbols match `[A-Za-z0-9.-]{1,15}` and are unique within their column
+* symbols match `[A-Za-z0-9.&-]{1,15}` (so Indian tickers like `M&M` work) and are unique within their column
 * rows can't have more columns than the header row
 * quoting follows RFC 4180, and a UTF-8 BOM is accepted
 
@@ -286,40 +289,40 @@ A holding symbol that appears twice in one request violates UNIQUE(`portfolio_id
 
 ---
 
-## 4. Preferences — `ApiController`
+## 4. Watchlist column preferences — `WatchlistColumnPreferencesController`
 
-All requests use the fixed `user_key = 'development'` (there is no auth).
+Stores which watchlist table columns a user shows and in what order. The Angular watchlist pages use
+this for both the US and India pages (one selection per user, not per page).
 
 | Endpoint | What it does | Tables |
 |---|---|---|
-| `GET /api/v1/preferences` | Returns preferences. Creates the default row on first call (this GET writes) | SELECT `user_preferences` by `user_key`. INSERT if missing |
-| `PUT /api/v1/preferences` | Replaces all three fields | SELECT, then INSERT/UPDATE `user_preferences` |
+| `GET /api/v1/users/{userId}/watchlist-column-preferences` | Returns the columns sorted by `displayOrder`. **404** if the user has never saved columns (the UI then uses its defaults) | SELECT `watchlist_column_preferences` by `user_id` order by `display_order` |
+| `PUT /api/v1/users/{userId}/watchlist-column-preferences` | Replaces the whole selection. Orders are renumbered 1..N in request order | DELETE by `user_id`, then INSERT one row per column |
 
 Body / response:
 ```json
-{ "favoriteWatchlists": ["Growth picks"],
-  "favoriteSymbols": { "US": ["NVDA"], "India": ["RELIANCE"] },
-  "watchlistColumns": ["symbol","name","price","change"] }
+// request
+{ "columns": [ { "columnKey": "symbol", "displayOrder": 1 }, { "columnKey": "marketCap", "displayOrder": 2 } ] }
+// response
+{ "userId": 1, "columns": [ ... ], "updatedAt": "2026-11-15T07:00:00" }
 ```
-`favoriteSymbols` keys must be `US`/`India`. `watchlistColumns` must come from the allowed set in
-`FolioService.COLUMN_KEYS` (e.g. `symbol, name, assetType, price, change, trend, sector, peRatio, rsi14, …`).
-Otherwise the request fails with 400.
-
-> Item favorites are stored in two places: `is_favorite` on the items tables and
-> `favoriteSymbols` in `user_preferences`. They are not synchronized.
+Validation: 1–100 columns; `columnKey` matches `[A-Za-z0-9_]+` (≤ 50 chars) and must be unique;
+`displayOrder` ≥ 1 and unique. Keys are not checked against a fixed list, so the UI can add columns
+(for example the India-only columns) without a backend change. Violations return 400.
 
 ---
 
 ## 5. Known issues / improvement notes
 
-1. **Query/path param violations return 500, not 400.** The `@Min`/`@Max`/`@Pattern`/`@Positive`
-   checks on `@RequestParam`/`@PathVariable` throw `ConstraintViolationException` (or
-   `HandlerMethodValidationException`), and `ApiExceptionHandler` doesn't handle either.
-   For example, `GET /watchlists?size=500` or `?market=XX` falls through to the generic 500 handler.
+1. **Unknown routes return 500, not 404.** A request to a path with no endpoint (for example
+   `PATCH /api/v1/watchlists/1/favorite` on a build that predates it) reaches the generic 500 handler
+   because `NoResourceFoundException` is not mapped. Query/path parameter violations such as
+   `?size=500` or `?market=XX` correctly return 400.
 2. **`GET /watchlists/{id}` paginates items but returns no item totals**, so clients can't tell
    how many pages of items exist.
 3. **Market vocabulary is inconsistent.** Import accepts `USA`/`US`/`India`, while list/create accept only `US`/`India`.
-4. **List endpoint ignores `userId`.** `user_id` is stored on US watchlists, but there is no filter by owner.
+4. **List endpoint ignores `userId`.** `user_id` is stored on US and India watchlists, but there is no filter by owner.
+7. **Item symbol rules differ from import.** CSV import accepts `&` (e.g. `M&M`), but `POST /watchlists/{id}/items` and `PUT /watchlists/{id}/items/{symbol}` validate with `[A-Za-z0-9.-]{1,15}`, so `M&M` is rejected there.
 5. **N+1 patterns:** `GET /portfolios` (holdings per portfolio), bulk add items (one duplicate-check
    SELECT per item), and delete watchlist (derived delete loads the items, then deletes them one at a time; the DB cascade
    would do this in a single statement).

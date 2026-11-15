@@ -1,7 +1,5 @@
 package com.foliopro.api.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.foliopro.api.dto.ApiDtos.*;
 import com.foliopro.api.model.*;
 import com.foliopro.api.repository.*;
@@ -12,10 +10,8 @@ import java.util.*;
 
 @Service
 public class FolioService {
- private static final String DEV_USER="development";
- private static final Set<String> COLUMN_KEYS=Set.of("symbol","name","assetType","price","change","trend","sector","score","volume","open","previousClose","dayHigh","dayLow","marketCap","averageVolume","relativeVolume","peRatio","forwardPE","eps","pegRatio","priceToBook","priceToSales","dividendYield","roe","roa","grossMargin","operatingMargin","profitMargin","debtToEquity","revenueGrowth","earningsGrowth","freeCashFlow","analystTarget","week52High","week52Low","movingAverage50","movingAverage200","rsi14","macd","macdSignal","beta","shortFloat","nextEarnings");
- private final PortfolioRepository portfolios; private final HoldingRepository holdings; private final WatchlistRepository watchlists; private final UsaWatchlistItemRepository usaItems; private final IndiaWatchlistItemRepository indiaItems; private final UserPreferencesRepository preferences; private final ObjectMapper mapper;
- public FolioService(PortfolioRepository p,HoldingRepository h,WatchlistRepository w,UsaWatchlistItemRepository ui,IndiaWatchlistItemRepository ii,UserPreferencesRepository u,ObjectMapper m){portfolios=p;holdings=h;watchlists=w;usaItems=ui;indiaItems=ii;preferences=u;mapper=m;}
+ private final PortfolioRepository portfolios; private final HoldingRepository holdings; private final WatchlistRepository watchlists; private final UsaWatchlistItemRepository usaItems; private final IndiaWatchlistItemRepository indiaItems;
+ public FolioService(PortfolioRepository p,HoldingRepository h,WatchlistRepository w,UsaWatchlistItemRepository ui,IndiaWatchlistItemRepository ii){portfolios=p;holdings=h;watchlists=w;usaItems=ui;indiaItems=ii;}
  @Transactional(readOnly=true) public PageResponse<PortfolioResponse> listPortfolios(int page,int size){Page<PortfolioEntity> result=portfolios.findAll(PageRequest.of(page,size,Sort.by("id").ascending()));return new PageResponse<>(result.map(this::portfolioDto).getContent(),page,size,result.getTotalElements(),result.getTotalPages());}
  @Transactional(readOnly=true) public PortfolioResponse getPortfolio(long id){return portfolioDto(portfolios.findById(id).orElseThrow(()->new NoSuchElementException("Portfolio not found")));}
  @Transactional public PortfolioResponse savePortfolio(Long id,PortfolioRequest request){PortfolioEntity p=id==null?new PortfolioEntity():portfolios.findById(id).orElseThrow(()->new NoSuchElementException("Portfolio not found"));p.setName(request.name().trim());p.setCountry(request.country().trim());p.setCurrency(request.currency());p.setAssetType(request.assetType());p.touch();p=portfolios.save(p);if(id!=null)holdings.deleteByPortfolioId(id);if(request.holdings()!=null)for(HoldingRequest h:request.holdings()){HoldingEntity e=new HoldingEntity();e.setPortfolio(p);e.setSymbol(h.symbol());e.setInstrument(h.instrument());e.setQuantity(h.quantity());e.setAverageCost(h.averageCost());e.setMarketValue(h.marketValue());e.setCurrency(h.currency());holdings.save(e);}return portfolioDto(p);}
@@ -43,7 +39,4 @@ public class FolioService {
   private WatchlistResponse watchlistDto(WatchlistEntity w){return watchlistDto(w,findItems(w).stream().map(this::itemDto).toList());}
   private WatchlistResponse watchlistDto(WatchlistEntity w,List<WatchlistItemResponse> items){return new WatchlistResponse(w.getId(),w.getName(),w.getMarket(),w.getCurrency(),w.getUserId(),w.isFavorite(),items);}
  private WatchlistItemResponse itemDto(WatchlistItemEntity e){return new WatchlistItemResponse(e.getId(),e.getSymbol(),e.getName(),e.isFavorite());}
- @Transactional public PreferencesResponse getPreferences(){UserPreferencesEntity e=preferences.findByUserKey(DEV_USER).orElseGet(()->{UserPreferencesEntity n=new UserPreferencesEntity();n.setUserKey(DEV_USER);return preferences.save(n);});return preferenceDto(e);}
- @Transactional public PreferencesResponse savePreferences(PreferencesRequest r){for(String key:r.watchlistColumns())if(!COLUMN_KEYS.contains(key))throw new IllegalArgumentException("Unsupported watchlist column: "+key);for(String market:r.favoriteSymbols().keySet())if(!Set.of("US","India").contains(market))throw new IllegalArgumentException("Unsupported market: "+market);try{UserPreferencesEntity e=preferences.findByUserKey(DEV_USER).orElseGet(()->{UserPreferencesEntity n=new UserPreferencesEntity();n.setUserKey(DEV_USER);return n;});e.setFavoriteWatchlists(mapper.writeValueAsString(r.favoriteWatchlists()));e.setFavoriteSymbols(mapper.writeValueAsString(r.favoriteSymbols()));e.setWatchlistColumns(mapper.writeValueAsString(r.watchlistColumns()));return preferenceDto(preferences.save(e));}catch(Exception ex){throw new IllegalArgumentException("Invalid preferences");}}
- private PreferencesResponse preferenceDto(UserPreferencesEntity e){try{return new PreferencesResponse(mapper.readValue(e.getFavoriteWatchlists(),new TypeReference<>(){}),mapper.readValue(e.getFavoriteSymbols(),new TypeReference<>(){}),mapper.readValue(e.getWatchlistColumns(),new TypeReference<>(){}));}catch(Exception ex){throw new IllegalStateException("Stored preferences are invalid");}}
 }

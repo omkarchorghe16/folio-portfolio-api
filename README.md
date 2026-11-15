@@ -1,12 +1,25 @@
 # Folio Pro API
 
-Java 21 / Spring Boot REST backend for the Angular Folio Pro prototype. The frontend repository is `omkarchorghe16/personal-wealth-management-angular`; this API keeps its US/India watchlist workflow and DTO fields compatible with `wealth.models.ts`. The implementation follows the Java 21 / Spring Web / JPA / PostgreSQL / OpenAPI approach used by the referenced `news-scheduler-svc`.
+Java 21 / Spring Boot REST backend for the Angular Folio Pro prototype. The frontend repository is `omkarchorghe16/personal-wealth-management-angular`; this API keeps its US/India watchlist workflow and DTO fields compatible with `wealth.models.ts`. It follows the same Java 21 / Spring Web / JPA / PostgreSQL / OpenAPI approach as `news-scheduler-svc`, and both services share the `folio_pro` database (this service owns its tables through Flyway).
 
-## Frontend inspection and contract assumptions
+## How the Angular app uses this API
 
-The Angular app is a prototype with synchronous mock methods in `src/app/core/services/wealth.service.ts`, typed in `src/app/core/models/wealth.models.ts`. Dashboard, portfolio, stocks, IPO, crypto, profile and settings screens currently use mock data. Watchlists uses `localStorage` for list edits/import, favorites, selected columns and order. Angular allows blank login credentials and README says auth is not integrated.
+The Folio Pro UI (`../personal-wealth-management-angular`, http://localhost:4200) has two watchlist
+pages, `/watchlists/us` and `/watchlists/india`. Both call this service directly at
+`http://localhost:8081` (CORS origin `FRONTEND_ORIGIN`):
 
-Contract decisions: backend CRUD uses database numeric IDs (replace sample/custom string watchlist IDs in the Angular model); page indices are zero-based, page size defaults to 15 and is capped at 100; watchlist bulk-add is atomic and duplicate symbols fail with 400; absent market/fundamental/technical data stays null; manual assets must not be assigned fabricated prices. Existing UI expects numeric `price` and `change`; treat these values as nullable in the Angular integration model rather than display `0` as a real quote. No auth is implemented: one development workspace is shared, so this service is **development-only** and must not be publicly exposed. Blank login is not interpreted as backend authentication. Add Spring Security and real user ownership before production.
+- `GET /watchlists?market=US|India&size=100` (all pages) to fill the watchlist dropdown; favorites come first.
+- `PATCH /watchlists/{id}/favorite` when the user clicks the star in the dropdown.
+- `POST /watchlists/import?market=USA|India&userId=1` for "Import CSV".
+- `GET`/`PUT /users/1/watchlist-column-preferences` for "Edit columns".
+
+Prices, market cap and fundamentals are **not** stored here. The UI loads them per symbol from
+`news-scheduler-svc` (port 8082): FMP profiles for US, Tapetide profiles for India.
+
+Contract notes: IDs are numeric; pages are zero-based with `size` 1–100 (default 15); bulk item adds
+are atomic and duplicate symbols fail with 400. There is no authentication: `userId` defaults to `1`
+everywhere and is not authorization-checked, so this service is **development-only** and must not be
+publicly exposed. Add Spring Security and real ownership checks before production.
 
 ## Endpoints
 
@@ -18,12 +31,13 @@ See [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) for a per-endpoint reference,
 | GET, POST | `/portfolios` | Paginated list / create (page=0,size=15) |
 | GET, PUT, DELETE | `/portfolios/{id}` | Read, replace portfolio and holdings, delete |
 | GET | `/watchlists?page=0&size=15&market=US\|India` | Paginated watchlists with every ticker nested in each watchlist's `items` array; omit market for both |
-| POST | `/watchlists` | Create `{name,market,userId?}`; USA `userId` defaults to `1` |
-| POST | `/watchlists/import?market=USA&userId=1` | Import a column-oriented CSV (`multipart/form-data`, field `file`); each header is a watchlist name and cells beneath it are symbols. USA imports store the supplied `userId` (default `1`) in `watchlists_usa`; India imports go to `watchlists_india`. Market defaults to `USA`. |
+| POST | `/watchlists` | Create `{name,market,userId?}`; `userId` defaults to `1` |
+| POST | `/watchlists/import?market=USA&userId=1` | Import a column-oriented CSV (`multipart/form-data`, field `file`); each header is a watchlist name and cells beneath it are symbols. `market=USA` writes to `watchlists_usa`, `market=India` to `watchlists_india`; both store `userId` (default `1`). Market defaults to `USA`. |
 | GET, PATCH, DELETE | `/watchlists/{id}` | Read with paginated items / rename / delete |
+| PATCH | `/watchlists/{id}/favorite?userId=1` | Star or un-star a USA or India watchlist: body `{"isFavorite": true}` |
 | POST | `/watchlists/{id}/items` | Atomic bulk-add `{items:[...]}` |
 | PUT, DELETE | `/watchlists/{id}/items/{symbol}` | Update or remove one symbol |
-| GET, PUT | `/preferences` | Favorite lists/symbols and ordered visible columns |
+| GET, PUT | `/users/{userId}/watchlist-column-preferences` | The user's watchlist table columns and order (GET returns 404 until first saved) |
 
 Watchlist items contain `symbol`, `name`, and `isFavorite` (false by default). These items are only for symbol tracking/favorites; market quote and technical data are not stored in these tables. USA items are stored in `watchlist_items_usa` and reference `watchlists_usa`; India items are stored in `watchlist_items_india` and reference `watchlists_india`. Portfolio holdings include `symbol`, `instrument`, `quantity`, `averageCost`, `marketValue`, and `currency`.
 
@@ -38,6 +52,7 @@ The watchlist-list response paginates watchlists (zero-based `page`, `size` 1–
       "market": "US",
       "currency": "USD",
       "userId": 1,
+      "isFavorite": true,
       "items": [
         {"id": 10, "symbol": "AAPL", "name": "Apple Inc.", "isFavorite": true}
       ]
@@ -50,11 +65,11 @@ The watchlist-list response paginates watchlists (zero-based `page`, `size` 1–
 }
 ```
 
-Errors have `{timestamp,status,error,message,details}`. Validation errors map field names to messages. Page/sort behavior is deterministic by ID. Duplicate item symbol (case-insensitive) returns HTTP 400; missing resource returns 404. CSV imports validate the complete file before saving and create all watchlists/items atomically; duplicate names or symbols, malformed CSV, and invalid symbols fail the import.
+Errors have `{timestamp,status,error,message,details}`. Validation errors map field names to messages. Watchlists are sorted with favorites first, then by ID; other lists are sorted by ID. Duplicate item symbol (case-insensitive) returns HTTP 400; missing resource returns 404. CSV imports validate the complete file before saving and create all watchlists/items atomically; duplicate names or symbols, malformed CSV, and invalid symbols fail the import.
 
 Watchlists and items are stored in separate USA and India tables: `watchlists_usa`/`watchlist_items_usa` and `watchlists_india`/`watchlist_items_india`. Each items table has a foreign key to its corresponding watchlist table. Flyway migrations move existing rows into the market-specific tables, preserve IDs and item links, remove quote/technical columns, and initialize `is_favorite` to false. The import endpoint accepts `USA` (also `US` for compatibility) or `India`.
 
-USA watchlists have a `user_id` column. Existing USA rows and new rows default to user ID `1`; the create-watchlist request can include `userId`, and CSV import accepts it as a query parameter. India watchlists do not have this column. The ID is currently a development placeholder and is not authenticated or authorization-checked.
+USA and India watchlists both have `user_id` (default `1`) and `is_favorite` (default `false`) columns. The create-watchlist request can include `userId`, and CSV import accepts it as a query parameter. The favorite endpoint returns 404 for a watchlist owned by another user. The user ID is a development placeholder and is not authenticated.
 
 ### Postman
 
@@ -152,12 +167,6 @@ architecture, JPA, REST APIs, testing, logging, and future provider integrations
 `.github/skills/`. These instructions supplement the existing implementation and do not introduce
 news-scheduler jobs, notification channels, or provider credentials into this application.
 
-## Angular integration guide
-
-Replace synchronous `WealthService` mock methods with `HttpClient` methods (configured with a base URL from Angular environment config, no credentials baked into source). Map `getWatchlists(market)` to paginated `GET /api/v1/watchlists`; create/rename/delete lists via POST/PATCH/DELETE; staged additions/import CSV can call bulk POST; item edits/removal use PUT/DELETE; portfolio CRUD and holdings use `/portfolios`; settings persist to `/preferences`.
-
-Move browser keys `folio-pro.favorite-watchlists`, `folio-pro.favorite-symbols`, and `folio-pro.watchlist-columns` to `GET/PUT /preferences`. Move `folio-pro.watchlist-data` to watchlist/item endpoints. CSV parsing/export can remain client-side, with parsed items sent in a bulk add request. `WatchlistsComponent` needs to consume server pagination (currently it slices in-memory data), accept numeric IDs, and render null prices/change/metrics as unavailable (not zero). Login/register and blank-credential demo entry should remain frontend-only until a separately defined secure authentication/token/ownership contract is implemented.
-
 ## Tests and limitations
 
-`mvn test` includes service/controller Spring tests using H2 and validates CRUD, bulk duplicate handling, pagination and request validation. There is intentionally no authentication or production ownership isolation. The current Angular dashboard contains hardcoded illustrative values; this API labels responses sample and does not provide live market feeds, financial advice, user identity or multi-user authorization.
+`mvn test` runs Spring integration tests against H2 (`src/test/resources/test-schema.sql`, which must be kept in step with the Flyway migrations). They cover CRUD, bulk duplicate handling, pagination, request validation, CSV import into both markets, favorites and their ordering, and column preferences. There is intentionally no authentication or multi-user authorization, and this API serves no market data or financial advice. Known gaps are listed in [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md#5-known-issues--improvement-notes).

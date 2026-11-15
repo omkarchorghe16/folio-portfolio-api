@@ -236,6 +236,25 @@
           }
         },
         {
+          "name": "Mark watchlist as favorite (star)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isFavorite\": true\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watchlists/{{watchlistId}}/favorite?userId={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watchlists", "{{watchlistId}}", "favorite"],
+              "query": [{"key": "userId", "value": "{{userId}}"}]
+            },
+            "description": "Sets is_favorite on a USA or India watchlist. Send {\"isFavorite\": false} to un-star. Favorites are listed first by GET /watchlists. 404 if the watchlist belongs to another user."
+          }
+        },
+        {
           "name": "Add items to watchlist",
           "request": {
             "method": "POST",
@@ -297,35 +316,37 @@
       ]
     },
     {
-      "name": "Preferences",
+      "name": "Watchlist column preferences",
       "item": [
         {
-          "name": "Get preferences",
+          "name": "Get watchlist column preferences",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/preferences",
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/watchlist-column-preferences",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "preferences"]
-            }
+              "path": ["api", "v1", "users", "{{userId}}", "watchlist-column-preferences"]
+            },
+            "description": "Returns the user's selected watchlist table columns ordered by displayOrder. 404 if the user has never saved columns (the UI then shows its defaults)."
           }
         },
         {
-          "name": "Save preferences",
+          "name": "Replace watchlist column preferences",
           "request": {
             "method": "PUT",
             "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"favoriteWatchlists\": [],\n  \"favoriteSymbols\": {\n    \"US\": [\"AAPL\", \"MSFT\"],\n    \"India\": []\n  },\n  \"watchlistColumns\": [\"symbol\", \"name\", \"assetType\", \"price\", \"change\", \"trend\"]\n}",
+              "raw": "{\n  \"columns\": [\n    {\"columnKey\": \"symbol\", \"displayOrder\": 1},\n    {\"columnKey\": \"name\", \"displayOrder\": 2},\n    {\"columnKey\": \"price\", \"displayOrder\": 3},\n    {\"columnKey\": \"change\", \"displayOrder\": 4},\n    {\"columnKey\": \"marketCap\", \"displayOrder\": 5}\n  ]\n}",
               "options": {"raw": {"language": "json"}}
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v1/preferences",
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/watchlist-column-preferences",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "preferences"]
-            }
+              "path": ["api", "v1", "users", "{{userId}}", "watchlist-column-preferences"]
+            },
+            "description": "Replaces the user's whole column selection. Column keys must be unique; displayOrder sets left-to-right order."
           }
         }
       ]

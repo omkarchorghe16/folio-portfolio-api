@@ -10,7 +10,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController @RequestMapping("/api/v1") @Validated
-@Tag(name = "Folio Pro", description = "Portfolio and preferences endpoints")
+@Tag(name = "Portfolios", description = "Portfolio and holdings endpoints")
 public class ApiController {
  private final FolioService service;
  public ApiController(FolioService s){service=s;}
@@ -24,8 +24,4 @@ public class ApiController {
  @PutMapping("/portfolios/{id}") public PortfolioResponse updatePortfolio(@PathVariable @Positive long id,@Valid @RequestBody PortfolioRequest r){return service.savePortfolio(id,r);}
  @Operation(summary="Delete a portfolio")
  @DeleteMapping("/portfolios/{id}") public void deletePortfolio(@PathVariable @Positive long id){service.deletePortfolio(id);}
- @Operation(summary="Get preferences",description="Returns preferences for the current development workspace.")
- @GetMapping("/preferences") public PreferencesResponse preferences(){return service.getPreferences();}
- @Operation(summary="Save preferences",description="Replaces favorite watchlists, favorite symbols, and visible watchlist columns.")
- @PutMapping("/preferences") public PreferencesResponse savePreferences(@Valid @RequestBody PreferencesRequest r){return service.savePreferences(r);}
 }

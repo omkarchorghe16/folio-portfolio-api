@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
                 title = "Folio Pro API",
                 version = "v1",
                 description = """
-                        REST API for portfolio management, watchlists, and preferences.
+                        REST API for portfolio management, watchlists, watchlist favorites, and watchlist column preferences.
                         Authentication and per-user
                         ownership are not implemented; do not expose this development API publicly.
                         """

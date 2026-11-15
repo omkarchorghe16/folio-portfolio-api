@@ -13,7 +13,8 @@ the repository-wide instructions.
 
 Keep changes focused, preserve existing behavior unless a behavior change is requested, and add or
 update tests for changed behavior. PostgreSQL is the authoritative application database and H2 is
-for tests. Keep USA and India watchlist persistence separate. Never commit credentials, log
+for tests. Every Flyway migration that changes a table must be mirrored in
+`src/test/resources/test-schema.sql`, or the H2 tests will not match production. Keep USA and India watchlist persistence separate. Never commit credentials, log
 secrets, or expose private runtime configuration.
 
 For user-visible or operational changes, update `README.md` and directly related documentation,
