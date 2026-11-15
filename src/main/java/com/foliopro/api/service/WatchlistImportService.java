@@ -21,7 +21,8 @@ import java.util.*;
 public class WatchlistImportService {
     private static final int MAX_WATCHLIST_NAME_LENGTH = 40;
     private static final int MAX_SYMBOL_LENGTH = 15;
-    private static final String SYMBOL_PATTERN = "[A-Za-z0-9.-]{1,15}";
+    /** Letters, digits, '.', '-' and '&' (Indian tickers such as M&M or M&MFIN.NS). */
+    private static final String SYMBOL_PATTERN = "[A-Za-z0-9.&-]{1,15}";
 
     private final WatchlistRepository watchlists;
     private final UsaWatchlistItemRepository usaItems;
@@ -54,9 +55,7 @@ public class WatchlistImportService {
             WatchlistEntity watchlist = normalizedMarket.equals("US")
                     ? new UsaWatchlistEntity()
                     : new IndiaWatchlistEntity();
-            if (watchlist instanceof UsaWatchlistEntity usa) {
-                usa.setUserId(userId);
-            }
+            watchlist.setUserId(userId);
             watchlist.setName(data.name());
             entities.add(watchlist);
             names.add(data.name());

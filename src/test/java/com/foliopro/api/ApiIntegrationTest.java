@@ -93,15 +93,17 @@ class ApiIntegrationTest {
   long indiaBefore=jdbc.queryForObject("SELECT COUNT(*) FROM watchlists_india",Long.class);
   long indiaItemsBefore=jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_india",Long.class);
   MockMultipartFile file=new MockMultipartFile("file","india.csv","text/csv",
-   "India Picks\nRELIANCE\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
-  mvc.perform(multipart("/api/v1/watchlists/import?market=India").file(file))
+   "India Picks\nRELIANCE.NS\nM&M.NS\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  mvc.perform(multipart("/api/v1/watchlists/import?market=India&userId=1").file(file))
    .andExpect(status().isCreated())
    .andExpect(jsonPath("$.watchlistsCreated").value(1))
-   .andExpect(jsonPath("$.itemsCreated").value(1));
+   .andExpect(jsonPath("$.itemsCreated").value(2));
   org.junit.jupiter.api.Assertions.assertEquals(indiaBefore+1,
    jdbc.queryForObject("SELECT COUNT(*) FROM watchlists_india",Long.class));
-  org.junit.jupiter.api.Assertions.assertEquals(indiaItemsBefore+1,
+  org.junit.jupiter.api.Assertions.assertEquals(indiaItemsBefore+2,
    jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_india",Long.class));
+  org.junit.jupiter.api.Assertions.assertEquals(1L,
+   jdbc.queryForObject("SELECT user_id FROM watchlists_india WHERE name='India Picks'",Long.class));
  }
  @Test void rejectsDuplicateSymbolsBeforeCreatingImportedWatchlists() throws Exception {
   long before=watchlists.count();
@@ -111,5 +113,26 @@ class ApiIntegrationTest {
    .andExpect(status().isBadRequest())
    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Duplicate symbol")));
   org.junit.jupiter.api.Assertions.assertEquals(before,watchlists.count());
+ }
+ @Test void togglesFavoriteOnUsaAndIndiaWatchlists() throws Exception {
+  for(String market:new String[]{"US","India"}){
+   String created=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+     .content("{\"name\":\"Fav "+market+"\",\"market\":\""+market+"\"}"))
+    .andExpect(status().isOk()).andExpect(jsonPath("$.isFavorite").value(false)).andReturn().getResponse().getContentAsString();
+   long id=mapper.readTree(created).get("id").asLong();
+   String table=market.equals("US")?"watchlists_usa":"watchlists_india";
+   mvc.perform(patch("/api/v1/watchlists/"+id+"/favorite?userId=1").contentType(MediaType.APPLICATION_JSON).content("{\"isFavorite\":true}"))
+    .andExpect(status().isOk()).andExpect(jsonPath("$.isFavorite").value(true)).andExpect(jsonPath("$.market").value(market));
+   org.junit.jupiter.api.Assertions.assertEquals(Boolean.TRUE,
+    jdbc.queryForObject("SELECT is_favorite FROM "+table+" WHERE id=?",Boolean.class,id));
+   mvc.perform(patch("/api/v1/watchlists/"+id+"/favorite").contentType(MediaType.APPLICATION_JSON).content("{\"isFavorite\":false}"))
+    .andExpect(status().isOk()).andExpect(jsonPath("$.isFavorite").value(false));
+   org.junit.jupiter.api.Assertions.assertEquals(Boolean.FALSE,
+    jdbc.queryForObject("SELECT is_favorite FROM "+table+" WHERE id=?",Boolean.class,id));
+   mvc.perform(patch("/api/v1/watchlists/"+id+"/favorite?userId=2").contentType(MediaType.APPLICATION_JSON).content("{\"isFavorite\":true}"))
+    .andExpect(status().isNotFound());
+   mvc.perform(patch("/api/v1/watchlists/"+id+"/favorite").contentType(MediaType.APPLICATION_JSON).content("{}"))
+    .andExpect(status().isBadRequest());
+  }
  }
 }

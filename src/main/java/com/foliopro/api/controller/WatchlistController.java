@@ -43,7 +43,7 @@ public class WatchlistController {
     }
 
     @Operation(summary = "Create a watchlist",
-            description = "Creates an empty watchlist for the selected market. For USA, userId defaults to 1 if omitted.")
+            description = "Creates an empty watchlist for the selected market. userId defaults to 1 if omitted.")
     @PostMapping
     public WatchlistResponse createWatchlist(@Valid @RequestBody WatchlistRequest request) {
         return service.createWatchlist(request);
@@ -63,6 +63,16 @@ public class WatchlistController {
     public WatchlistResponse renameWatchlist(
             @PathVariable @Positive long id, @Valid @RequestBody WatchlistRequest request) {
         return service.renameWatchlist(id, request);
+    }
+
+    @Operation(summary = "Mark or unmark a watchlist as favorite",
+            description = "Sets is_favorite on a USA or India watchlist owned by userId (defaults to 1). Returns 404 if the watchlist does not exist or belongs to another user.")
+    @PatchMapping("/{id}/favorite")
+    public WatchlistResponse setFavorite(
+            @PathVariable @Positive long id,
+            @RequestParam(defaultValue = "1") @Positive long userId,
+            @Valid @RequestBody WatchlistFavoriteRequest request) {
+        return service.setWatchlistFavorite(id, userId, request.isFavorite());
     }
 
     @Operation(summary = "Delete a watchlist", description = "Deletes the watchlist and its items.")
@@ -119,7 +129,7 @@ public class WatchlistController {
              @Parameter(description = "Target watchlist table: USA or India", example = "USA",
                      schema = @Schema(allowableValues = {"USA", "India", "US"}, defaultValue = "USA"))
             @RequestParam(defaultValue = "USA") String market,
-            @Parameter(description = "USA watchlist owner ID. Defaults to 1.", example = "1")
+            @Parameter(description = "Watchlist owner ID (USA and India). Defaults to 1.", example = "1")
             @RequestParam(defaultValue = "1") Long userId) {
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CSV file must not be empty");

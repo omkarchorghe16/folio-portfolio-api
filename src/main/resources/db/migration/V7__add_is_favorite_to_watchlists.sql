@@ -1,0 +1,5 @@
+ALTER TABLE watchlists_usa
+  ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE watchlists_india
+  ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT FALSE;

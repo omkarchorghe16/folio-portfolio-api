@@ -16,8 +16,8 @@ Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V4). Hibern
 
 | Table | Purpose | Key columns | Entity |
 |---|---|---|---|
-| `watchlists_usa` | US watchlists | `id` (from sequence `watchlists_id_seq`), `name` ≤40, `market` = `'US'` (CHECK), `currency` default `USD`, `user_id` NOT NULL default 1 (indexed), `created_at` | `UsaWatchlistEntity` |
-| `watchlists_india` | India watchlists | `id` (same sequence), `name`, `market` = `'India'` (CHECK), `currency` default `INR`, `created_at` | `IndiaWatchlistEntity` |
+| `watchlists_usa` | US watchlists | `id` (from sequence `watchlists_id_seq`), `name` ≤40, `market` = `'US'` (CHECK), `currency` default `USD`, `user_id` NOT NULL default 1 (indexed), `is_favorite` NOT NULL default false, `created_at` | `UsaWatchlistEntity` |
+| `watchlists_india` | India watchlists | `id` (same sequence), `name`, `market` = `'India'` (CHECK), `currency` default `INR`, `user_id` NOT NULL default 1 (indexed), `is_favorite` NOT NULL default false, `created_at` | `IndiaWatchlistEntity` |
 | `watchlist_items_usa` | Tickers in US watchlists | `id` identity, `watchlist_id` → `watchlists_usa.id` ON DELETE CASCADE, `symbol` ≤15, `name` ≤160, `is_favorite`; UNIQUE(`watchlist_id`,`symbol`) | `UsaWatchlistItemEntity` |
 | `watchlist_items_india` | Tickers in India watchlists | same shape, FK → `watchlists_india.id` | `IndiaWatchlistItemEntity` |
 | `portfolios` | Portfolios | `id`, `name`, `country`, `currency`, `asset_type`, `created_at`, `updated_at` | `PortfolioEntity` |
@@ -170,6 +170,15 @@ ignored.
 SELECT all items from the matching items table for the response.
 
 Errors: 404 not found, 400 market mismatch / validation.
+
+### 2.4a `PATCH /api/v1/watchlists/{id}/favorite?userId=1` — star / un-star a watchlist
+
+Body: `{"isFavorite": true}` (required). `userId` defaults to 1. Works for USA and India watchlists.
+
+**Tables:** UNION ALL lookup by id → UPDATE `watchlists_usa`/`watchlists_india` `set is_favorite` →
+SELECT all items for the response. The response's `isFavorite` reflects the saved value.
+
+Errors: 404 if the watchlist does not exist or belongs to another user, 400 if `isFavorite` is missing.
 
 ### 2.5 `DELETE /api/v1/watchlists/{id}` — delete watchlist and its items
 

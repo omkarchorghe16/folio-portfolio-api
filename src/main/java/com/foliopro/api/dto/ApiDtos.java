@@ -23,7 +23,8 @@ public final class ApiDtos {
     public record BulkItemsRequest(@NotEmpty @Size(max=100) @Valid List<WatchlistItemRequest> items) {}
     public record WatchlistItemResponse(Long id, String symbol, String name, boolean isFavorite) {}
     public record WatchlistResponse(Long id, String name, String market, String currency, Long userId,
-      List<WatchlistItemResponse> items) {}
+      boolean isFavorite, List<WatchlistItemResponse> items) {}
+    public record WatchlistFavoriteRequest(@NotNull Boolean isFavorite) {}
     public record WatchlistImportResponse(int watchlistsCreated, int itemsCreated, List<String> watchlistNames) {}
     public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages) {}
     public record PreferencesRequest(@NotNull List<@NotBlank String> favoriteWatchlists,
