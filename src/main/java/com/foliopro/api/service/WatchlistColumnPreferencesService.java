@@ -18,7 +18,7 @@ public class WatchlistColumnPreferencesService {
     }
 
     @Transactional(readOnly = true)
-    public WatchlistColumnPreferencesResponse get(Long userId) {
+    public WatchlistColumnPreferencesResponse getPreferences(Long userId) {
         List<WatchlistColumnPreferenceEntity> rows = repository.findByUserIdOrderByDisplayOrderAsc(userId);
         if (rows.isEmpty()) {
             throw new NoSuchElementException("No watchlist column preferences saved");
@@ -28,7 +28,7 @@ public class WatchlistColumnPreferencesService {
 
     /** Full replace: the request becomes the user's complete column selection, stored contiguously 1..N. */
     @Transactional
-    public WatchlistColumnPreferencesResponse replace(Long userId, WatchlistColumnPreferencesRequest request) {
+    public WatchlistColumnPreferencesResponse replacePreferences(Long userId, WatchlistColumnPreferencesRequest request) {
         List<WatchlistColumnPreferenceDto> columns = request.columns();
         Set<String> keys = new HashSet<>();
         Set<Integer> orders = new HashSet<>();

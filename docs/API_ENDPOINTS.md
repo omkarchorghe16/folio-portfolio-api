@@ -106,7 +106,7 @@ Sorted with favorites first (`is_favorite` true before false), then by `id` asce
 
 **Tables read:** `watchlists_usa`, `watchlists_india`, `watchlist_items_usa`, `watchlist_items_india`.
 
-**Query sequence** (`FolioService.listWatchlists`, one read-only transaction):
+**Query sequence** (`WatchlistService.listWatchlists`, one read-only transaction):
 
 1. **Page of watchlists:** UNION ALL over both watchlist tables, `order by is_favorite desc, id`, `offset/fetch first`.
    If `market` is given, a `where market = ?` filter is applied to the union.
@@ -269,7 +269,7 @@ curl -X POST 'localhost:8081/api/v1/watchlists/import?market=USA&userId=1' -F 'f
 
 ---
 
-## 3. Portfolio endpoints — `ApiController`
+## 3. Portfolio endpoints — `PortfolioController`
 
 `PortfolioRequest`: `name` (≤100, required), `country` (≤40, required), `currency` (`USD`|`INR`),
 `assetType` (≤160, optional), `holdings[]` (optional). Each holding has `symbol` (≤20), `instrument` (≤160),

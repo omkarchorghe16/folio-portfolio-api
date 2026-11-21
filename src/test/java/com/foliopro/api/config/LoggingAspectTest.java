@@ -15,7 +15,7 @@ class LoggingAspectTest {
 
     @Test
     void preservesSuccessfulReturnValue() throws Throwable {
-        ProceedingJoinPoint joinPoint = joinPoint("ApiController.getDashboard()");
+        ProceedingJoinPoint joinPoint = joinPoint("PortfolioController.listPortfolios()");
         when(joinPoint.proceed()).thenReturn("dashboard");
 
         assertEquals("dashboard", aspect.logInvocation(joinPoint));
@@ -23,7 +23,7 @@ class LoggingAspectTest {
 
     @Test
     void propagatesOriginalException() throws Throwable {
-        ProceedingJoinPoint joinPoint = joinPoint("FolioService.getDashboard()");
+        ProceedingJoinPoint joinPoint = joinPoint("PortfolioService.listPortfolios()");
         IllegalStateException expected = new IllegalStateException("synthetic failure");
         when(joinPoint.proceed()).thenThrow(expected);
 

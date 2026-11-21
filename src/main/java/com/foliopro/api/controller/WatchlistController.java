@@ -1,7 +1,7 @@
 package com.foliopro.api.controller;
 
 import com.foliopro.api.dto.ApiDtos.*;
-import com.foliopro.api.service.FolioService;
+import com.foliopro.api.service.WatchlistService;
 import com.foliopro.api.service.WatchlistImportService;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,61 +24,61 @@ import java.util.List;
 @Tag(name = "Watchlists", description = "Watchlist CRUD, items, pagination, and CSV import")
 public class WatchlistController {
     private static final long MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-    private final FolioService service;
+    private final WatchlistService watchlistService;
     private final WatchlistImportService importService;
 
-    public WatchlistController(FolioService service, WatchlistImportService importService) {
-        this.service = service;
+    public WatchlistController(WatchlistService watchlistService, WatchlistImportService importService) {
+        this.watchlistService = watchlistService;
         this.importService = importService;
     }
 
     @Operation(summary = "List watchlists with tickers",
             description = "Returns a page of watchlists with every ticker and its name nested in each watchlist's items array. Pagination applies to watchlists; omit market to include both US and India.")
     @GetMapping
-    public PageResponse<WatchlistResponse> watchlists(
+    public PageResponse<WatchlistResponse> listWatchlists(
             @RequestParam(required = false) @Pattern(regexp = "US|India") String market,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "15") @Min(1) @Max(100) int size) {
-        return service.listWatchlists(market, page, size);
+        return watchlistService.listWatchlists(market, page, size);
     }
 
     @Operation(summary = "Create a watchlist",
             description = "Creates an empty watchlist for the selected market. userId defaults to 1 if omitted.")
     @PostMapping
     public WatchlistResponse createWatchlist(@Valid @RequestBody WatchlistRequest request) {
-        return service.createWatchlist(request);
+        return watchlistService.createWatchlist(request);
     }
 
     @Operation(summary = "Get a watchlist", description = "Returns a watchlist with a page of its items.")
     @GetMapping("/{id}")
-    public WatchlistResponse watchlist(
+    public WatchlistResponse getWatchlist(
             @PathVariable @Positive long id,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "15") @Min(1) @Max(100) int size) {
-        return service.getWatchlist(id, page, size);
+        return watchlistService.getWatchlist(id, page, size);
     }
 
     @Operation(summary = "Rename a watchlist", description = "Updates the watchlist name. Its market cannot be changed.")
     @PatchMapping("/{id}")
     public WatchlistResponse renameWatchlist(
             @PathVariable @Positive long id, @Valid @RequestBody WatchlistRequest request) {
-        return service.renameWatchlist(id, request);
+        return watchlistService.renameWatchlist(id, request);
     }
 
     @Operation(summary = "Mark or unmark a watchlist as favorite",
             description = "Sets is_favorite on a USA or India watchlist owned by userId (defaults to 1). Returns 404 if the watchlist does not exist or belongs to another user.")
     @PatchMapping("/{id}/favorite")
-    public WatchlistResponse setFavorite(
+    public WatchlistResponse setWatchlistFavorite(
             @PathVariable @Positive long id,
             @RequestParam(defaultValue = "1") @Positive long userId,
             @Valid @RequestBody WatchlistFavoriteRequest request) {
-        return service.setWatchlistFavorite(id, userId, request.isFavorite());
+        return watchlistService.setWatchlistFavorite(id, userId, request.isFavorite());
     }
 
     @Operation(summary = "Delete a watchlist", description = "Deletes the watchlist and its items.")
     @DeleteMapping("/{id}")
     public void deleteWatchlist(@PathVariable @Positive long id) {
-        service.deleteWatchlist(id);
+        watchlistService.deleteWatchlist(id);
     }
 
     @Operation(summary = "Add items to a watchlist",
@@ -86,7 +86,7 @@ public class WatchlistController {
     @PostMapping("/{id}/items")
     public List<WatchlistItemResponse> addItems(
             @PathVariable @Positive long id, @Valid @RequestBody BulkItemsRequest request) {
-        return service.addItems(id, request);
+        return watchlistService.addItems(id, request);
     }
 
     @Operation(summary = "Update a watchlist item", description = "Updates an item identified by its symbol.")
@@ -95,13 +95,13 @@ public class WatchlistController {
             @PathVariable @Positive long id,
             @PathVariable String symbol,
             @Valid @RequestBody WatchlistItemRequest request) {
-        return service.updateItem(id, symbol, request);
+        return watchlistService.updateItem(id, symbol, request);
     }
 
     @Operation(summary = "Remove an item from a watchlist")
     @DeleteMapping("/{id}/items/{symbol}")
     public void removeItem(@PathVariable @Positive long id, @PathVariable String symbol) {
-        service.removeItem(id, symbol);
+        watchlistService.removeItem(id, symbol);
     }
 
     @Operation(
