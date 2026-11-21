@@ -106,7 +106,7 @@ curl -X PUT http://localhost:8081/api/v1/portfolios -H 'Content-Type: applicatio
 ```bash
 export POSTGRES_URL=jdbc:postgresql://localhost:5432/folio_pro
 export POSTGRES_USER=folio_pro
-export POSTGRES_PASSWORD=local-only-password
+export POSTGRES_PASSWORD=admin
 export FRONTEND_ORIGIN=http://localhost:4200
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 mvn test

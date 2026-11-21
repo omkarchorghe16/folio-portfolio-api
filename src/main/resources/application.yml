@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/folio_pro}
     username: ${POSTGRES_USER:folio_pro}
-    password: ${POSTGRES_PASSWORD:folio_pro}
+    password: ${POSTGRES_PASSWORD:admin}
   jpa:
     hibernate:
       ddl-auto: validate
