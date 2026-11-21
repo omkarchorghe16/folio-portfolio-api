@@ -163,4 +163,83 @@ class ApiIntegrationTest {
    org.junit.jupiter.api.Assertions.assertTrue(secondIndex>=0&&firstIndex>secondIndex);
   }
  }
+ @Test void addsStocksToOwnedIndiaWatchlistOnly() throws Exception {
+  String created=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"name\":\"India adds\",\"market\":\"India\",\"userId\":1}"))
+   .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+  long id=mapper.readTree(created).get("id").asLong();
+  mvc.perform(post("/api/v1/watchlists/india/"+id+"/items?userId=1").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"reliance\",\"name\":\"Reliance Industries Limited\"},{\"symbol\":\"M&M\",\"name\":\"Mahindra & Mahindra Limited\"},{\"symbol\":\"NIFTYBEES\",\"name\":\"Nippon India ETF Nifty 50 BeES\"}]}"))
+   .andExpect(status().isCreated()).andExpect(jsonPath("$.length()").value(3))
+   .andExpect(jsonPath("$[0].symbol").value("RELIANCE")).andExpect(jsonPath("$[0].name").value("Reliance Industries Limited"));
+  org.junit.jupiter.api.Assertions.assertEquals(3,
+   jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_india WHERE watchlist_id=?",Integer.class,id));
+  // Already in the list: rejected, and nothing from the request is saved.
+  mvc.perform(post("/api/v1/watchlists/india/"+id+"/items").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"TCS\",\"name\":\"TCS\"},{\"symbol\":\"RELIANCE\",\"name\":\"Reliance\"}]}"))
+   .andExpect(status().isBadRequest());
+  org.junit.jupiter.api.Assertions.assertEquals(3,
+   jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_india WHERE watchlist_id=?",Integer.class,id));
+  // Another user's list.
+  mvc.perform(post("/api/v1/watchlists/india/"+id+"/items?userId=2").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"INFY\"}]}")).andExpect(status().isNotFound());
+  // A USA watchlist is not reachable through the India endpoint.
+  String usa=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"name\":\"USA not India\",\"market\":\"US\"}")).andReturn().getResponse().getContentAsString();
+  mvc.perform(post("/api/v1/watchlists/india/"+mapper.readTree(usa).get("id").asLong()+"/items").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"AAPL\"}]}")).andExpect(status().isNotFound());
+ }
+ @Test void removesStockFromOwnedIndiaWatchlistOnly() throws Exception {
+  String created=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"name\":\"India removes\",\"market\":\"India\"}")).andReturn().getResponse().getContentAsString();
+  long id=mapper.readTree(created).get("id").asLong();
+  mvc.perform(post("/api/v1/watchlists/india/"+id+"/items").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"M&M\"},{\"symbol\":\"TCS\"}]}")).andExpect(status().isCreated());
+  // Another user's list, an unknown symbol and a USA list are all 404 and delete nothing.
+  mvc.perform(delete("/api/v1/watchlists/india/"+id+"/items/TCS?userId=2")).andExpect(status().isNotFound());
+  mvc.perform(delete("/api/v1/watchlists/india/"+id+"/items/INFY")).andExpect(status().isNotFound());
+  String usa=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"name\":\"USA keep\",\"market\":\"US\"}")).andReturn().getResponse().getContentAsString();
+  long usaId=mapper.readTree(usa).get("id").asLong();
+  mvc.perform(post("/api/v1/watchlists/"+usaId+"/items").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"TCS\"}]}")).andExpect(status().isOk());
+  mvc.perform(delete("/api/v1/watchlists/india/"+usaId+"/items/TCS")).andExpect(status().isNotFound());
+  org.junit.jupiter.api.Assertions.assertEquals(1,
+   jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_usa WHERE watchlist_id=?",Integer.class,usaId));
+  // Owner deletes, case-insensitively and with & in the symbol (URL-encoded as the UI sends it).
+  mvc.perform(delete("/api/v1/watchlists/india/"+id+"/items/tcs?userId=1")).andExpect(status().isNoContent());
+  mvc.perform(delete("/api/v1/watchlists/india/{id}/items/{symbol}",id,"M&M")).andExpect(status().isNoContent());
+  org.junit.jupiter.api.Assertions.assertEquals(0,
+   jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_india WHERE watchlist_id=?",Integer.class,id));
+ }
+ @Test void addsAndRemovesStocksOnOwnedUsaWatchlistOnly() throws Exception {
+  String created=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"name\":\"USA adds\",\"market\":\"US\"}")).andReturn().getResponse().getContentAsString();
+  long id=mapper.readTree(created).get("id").asLong();
+  mvc.perform(post("/api/v1/watchlists/us/"+id+"/items?userId=1").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"aapl\",\"name\":\"Apple Inc. - Common Stock\"},{\"symbol\":\"BRK.B\"},{\"symbol\":\"ABR$D\",\"name\":\"Arbor Realty Trust Preferred\"}]}"))
+   .andExpect(status().isCreated()).andExpect(jsonPath("$.length()").value(3))
+   .andExpect(jsonPath("$[0].symbol").value("AAPL")).andExpect(jsonPath("$[1].name").value("BRK.B"));
+  org.junit.jupiter.api.Assertions.assertEquals(3,
+   jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_usa WHERE watchlist_id=?",Integer.class,id));
+  mvc.perform(post("/api/v1/watchlists/us/"+id+"/items").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"MSFT\"},{\"symbol\":\"AAPL\"}]}")).andExpect(status().isBadRequest());
+  mvc.perform(post("/api/v1/watchlists/us/"+id+"/items?userId=2").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"MSFT\"}]}")).andExpect(status().isNotFound());
+  String india=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"name\":\"India not USA\",\"market\":\"India\"}")).andReturn().getResponse().getContentAsString();
+  long indiaId=mapper.readTree(india).get("id").asLong();
+  mvc.perform(post("/api/v1/watchlists/us/"+indiaId+"/items").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"MSFT\"}]}")).andExpect(status().isNotFound());
+  org.junit.jupiter.api.Assertions.assertEquals(3,
+   jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_usa WHERE watchlist_id=?",Integer.class,id));
+  mvc.perform(delete("/api/v1/watchlists/us/"+id+"/items/AAPL?userId=2")).andExpect(status().isNotFound());
+  mvc.perform(delete("/api/v1/watchlists/us/"+indiaId+"/items/AAPL")).andExpect(status().isNotFound());
+  mvc.perform(delete("/api/v1/watchlists/us/"+id+"/items/MSFT")).andExpect(status().isNotFound());
+  mvc.perform(delete("/api/v1/watchlists/us/"+id+"/items/aapl?userId=1")).andExpect(status().isNoContent());
+  mvc.perform(delete("/api/v1/watchlists/us/{id}/items/{symbol}",id,"ABR$D")).andExpect(status().isNoContent());
+  mvc.perform(delete("/api/v1/watchlists/us/{id}/items/{symbol}",id,"BRK.B")).andExpect(status().isNoContent());
+  org.junit.jupiter.api.Assertions.assertEquals(0,
+   jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_usa WHERE watchlist_id=?",Integer.class,id));
+ }
 }

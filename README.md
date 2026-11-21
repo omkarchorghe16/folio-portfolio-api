@@ -36,7 +36,11 @@ See [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) for a per-endpoint reference,
 | GET, PATCH, DELETE | `/watchlists/{id}` | Read with paginated items / rename / delete |
 | PATCH | `/watchlists/{id}/favorite?userId=1` | Star or un-star a USA or India watchlist: body `{"isFavorite": true}` |
 | POST | `/watchlists/{id}/items` | Atomic bulk-add `{items:[...]}` |
+| POST | `/watchlists/india/{id}/items?userId=1` | Atomic bulk-add of NSE stocks into `watchlist_items_india`; 201 with the saved items. 404 if the list is a USA list or belongs to another user; 400 on a duplicate symbol. Symbols may contain `. - & $` (e.g. `M&M`, `BRK.B`, `ABR$D`) |
 | PUT, DELETE | `/watchlists/{id}/items/{symbol}` | Update or remove one symbol |
+| DELETE | `/watchlists/india/{id}/items/{symbol}?userId=1` | Remove one stock from an India watchlist owned by the user (204). 404 for a USA list, another user's list, or a symbol not in the list |
+| POST | `/watchlists/us/{id}/items?userId=1` | Same as the India bulk-add, into `watchlist_items_usa`; 404 for an India list or another user's list |
+| DELETE | `/watchlists/us/{id}/items/{symbol}?userId=1` | Remove one stock from a USA watchlist owned by the user (204); 404 otherwise |
 | GET, PUT | `/users/{userId}/watchlist-column-preferences` | The user's watchlist table columns and order (GET returns 404 until first saved) |
 
 Watchlist items contain `symbol`, `name`, and `isFavorite` (false by default). These items are only for symbol tracking/favorites; market quote and technical data are not stored in these tables. USA items are stored in `watchlist_items_usa` and reference `watchlists_usa`; India items are stored in `watchlist_items_india` and reference `watchlists_india`. Portfolio holdings include `symbol`, `instrument`, `quantity`, `averageCost`, `marketValue`, and `currency`.

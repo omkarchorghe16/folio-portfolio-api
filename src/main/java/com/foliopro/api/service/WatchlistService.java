@@ -122,7 +122,25 @@ public class WatchlistService {
     /** Adds all items or none: a symbol repeated in the request or already in the watchlist is rejected. */
     @Transactional
     public List<WatchlistItemResponse> addItems(long watchlistId, BulkItemsRequest request) {
-        WatchlistEntity watchlist = findWatchlist(watchlistId);
+        return addItemsTo(findWatchlist(watchlistId), request);
+    }
+
+    /**
+     * Adds stocks to an India watchlist owned by {@code userId}, all or none. USA watchlists and watchlists
+     * owned by another user are reported as not found, so this endpoint can never write to watchlist_items_usa.
+     */
+    @Transactional
+    public List<WatchlistItemResponse> addIndiaItems(long watchlistId, long userId, BulkItemsRequest request) {
+        return addItemsTo(findOwnedWatchlist(watchlistId, userId, IndiaWatchlistEntity.class), request);
+    }
+
+    /** Same as {@link #addIndiaItems} for a USA watchlist (watchlist_items_usa); India lists are not found. */
+    @Transactional
+    public List<WatchlistItemResponse> addUsaItems(long watchlistId, long userId, BulkItemsRequest request) {
+        return addItemsTo(findOwnedWatchlist(watchlistId, userId, UsaWatchlistEntity.class), request);
+    }
+
+    private List<WatchlistItemResponse> addItemsTo(WatchlistEntity watchlist, BulkItemsRequest request) {
         Set<String> seenSymbols = new HashSet<>();
         List<WatchlistItemResponse> added = new ArrayList<>();
         for (WatchlistItemRequest itemRequest : request.items()) {
@@ -158,7 +176,33 @@ public class WatchlistService {
         deleteItem(item);
     }
 
+    /** Removes one stock from an India watchlist owned by {@code userId}; USA and other users' lists are not found. */
+    @Transactional
+    public void removeIndiaItem(long watchlistId, long userId, String symbol) {
+        removeOwnedItem(findOwnedWatchlist(watchlistId, userId, IndiaWatchlistEntity.class), symbol);
+    }
+
+    /** Removes one stock from a USA watchlist owned by {@code userId}; India and other users' lists are not found. */
+    @Transactional
+    public void removeUsaItem(long watchlistId, long userId, String symbol) {
+        removeOwnedItem(findOwnedWatchlist(watchlistId, userId, UsaWatchlistEntity.class), symbol);
+    }
+
+    private void removeOwnedItem(WatchlistEntity watchlist, String symbol) {
+        WatchlistItemEntity item = findItem(watchlist, normalizeSymbol(symbol))
+                .orElseThrow(() -> new NoSuchElementException(ITEM_NOT_FOUND));
+        deleteItem(item);
+    }
+
     // ---- Helpers ----
+
+    /** A watchlist of the given market owned by {@code userId}; anything else is reported as not found. */
+    private WatchlistEntity findOwnedWatchlist(long id, long userId, Class<? extends WatchlistEntity> market) {
+        return watchlistRepository.findById(id)
+                .filter(market::isInstance)
+                .filter(found -> found.getUserId() != null && found.getUserId() == userId)
+                .orElseThrow(() -> new NoSuchElementException(WATCHLIST_NOT_FOUND));
+    }
 
     private WatchlistEntity findWatchlist(long id) {
         return watchlistRepository.findById(id).orElseThrow(() -> new NoSuchElementException(WATCHLIST_NOT_FOUND));

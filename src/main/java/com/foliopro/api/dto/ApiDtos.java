@@ -17,8 +17,11 @@ public final class ApiDtos {
     public record PortfolioResponse(Long id, String name, String country, String currency, String assetType, List<HoldingResponse> holdings, boolean sampleData) {}
     public record WatchlistRequest(@NotBlank @Size(max=40) String name, @NotBlank @Pattern(regexp="US|India") String market,
       @Positive Long userId) {}
-    public record WatchlistItemRequest(@NotBlank @Pattern(regexp="[A-Za-z0-9.-]{1,15}") String symbol,
-      @Size(max=160) String name, Boolean isFavorite) {}
+    /** Symbols may contain . - & (NSE: M&M, BAJAJ-AUTO) and $ (US preferred shares: ABR$D). */
+    public record WatchlistItemRequest(@NotBlank @Pattern(regexp=WatchlistItemRequest.SYMBOL_PATTERN) String symbol,
+      @Size(max=160) String name, Boolean isFavorite) {
+        public static final String SYMBOL_PATTERN = "[A-Za-z0-9.&$-]{1,15}";
+    }
     public record BulkItemsRequest(@NotEmpty @Size(max=100) @Valid List<WatchlistItemRequest> items) {}
     public record WatchlistItemResponse(Long id, String symbol, String name, boolean isFavorite) {}
     public record WatchlistResponse(Long id, String name, String market, String currency, Long userId,

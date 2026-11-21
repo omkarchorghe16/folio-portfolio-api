@@ -23,6 +23,7 @@ import java.util.List;
 @Validated
 @Tag(name = "Watchlists", description = "Watchlist CRUD, items, pagination, and CSV import")
 public class WatchlistController {
+    private static final String SYMBOL_PATTERN = WatchlistItemRequest.SYMBOL_PATTERN;
     private static final long MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
     private final WatchlistService watchlistService;
     private final WatchlistImportService importService;
@@ -87,6 +88,62 @@ public class WatchlistController {
     public List<WatchlistItemResponse> addItems(
             @PathVariable @Positive long id, @Valid @RequestBody BulkItemsRequest request) {
         return watchlistService.addItems(id, request);
+    }
+
+    @Operation(summary = "Add stocks to an India watchlist",
+            description = "Saves up to 100 NSE stocks into watchlist_items_india for an India watchlist owned by userId "
+                    + "(defaults to 1). All items are saved or none: a symbol repeated in the request or already in "
+                    + "the watchlist returns 400. Returns 404 if the watchlist does not exist, is a USA watchlist, or "
+                    + "belongs to another user.")
+    @PostMapping("/india/{id}/items")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<WatchlistItemResponse> addIndiaItems(
+            @PathVariable @Positive long id,
+            @RequestParam(defaultValue = "1") @Positive long userId,
+            @Valid @RequestBody BulkItemsRequest request) {
+        return watchlistService.addIndiaItems(id, userId, request);
+    }
+
+    @Operation(summary = "Remove a stock from an India watchlist",
+            description = "Deletes one row from watchlist_items_india for an India watchlist owned by userId "
+                    + "(defaults to 1). The symbol is matched case-insensitively. Returns 204 when deleted and 404 if "
+                    + "the watchlist does not exist, is a USA watchlist, belongs to another user, or does not "
+                    + "contain the symbol.")
+    @DeleteMapping("/india/{id}/items/{symbol}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeIndiaItem(
+            @PathVariable @Positive long id,
+            @PathVariable @Pattern(regexp = SYMBOL_PATTERN) String symbol,
+            @RequestParam(defaultValue = "1") @Positive long userId) {
+        watchlistService.removeIndiaItem(id, userId, symbol);
+    }
+
+    @Operation(summary = "Add stocks to a USA watchlist",
+            description = "Saves up to 100 US stocks into watchlist_items_usa for a USA watchlist owned by userId "
+                    + "(defaults to 1). All items are saved or none: a symbol repeated in the request or already in "
+                    + "the watchlist returns 400. Returns 404 if the watchlist does not exist, is an India watchlist, "
+                    + "or belongs to another user.")
+    @PostMapping("/us/{id}/items")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<WatchlistItemResponse> addUsaItems(
+            @PathVariable @Positive long id,
+            @RequestParam(defaultValue = "1") @Positive long userId,
+            @Valid @RequestBody BulkItemsRequest request) {
+        return watchlistService.addUsaItems(id, userId, request);
+    }
+
+    @Operation(summary = "Remove a stock from a USA watchlist",
+            description = "Deletes one row from watchlist_items_usa for a USA watchlist owned by userId (defaults to "
+                    + "1). The symbol is matched case-insensitively. Returns 204 when deleted and 404 if the "
+                    + "watchlist does not exist, is an India watchlist, belongs to another user, or does not "
+                    + "contain the symbol.")
+    @DeleteMapping("/us/{id}/items/{symbol}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeUsaItem(
+            @PathVariable @Positive long id,
+            @PathVariable @Pattern(regexp = SYMBOL_PATTERN) String symbol,
+            @RequestParam(defaultValue = "1") @Positive long userId) {
+        watchlistService.removeUsaItem(id, userId, symbol);
     }
 
     @Operation(summary = "Update a watchlist item", description = "Updates an item identified by its symbol.")
