@@ -1,22 +1,22 @@
-# Repository instructions
+# Repository instructions: invesment-management-svc
 
-For code changes, follow the applicable guidance in:
+Spring Boot (Java 21, Maven) API on port 8081 for the Folio Pro app. It owns portfolios, holdings,
+USA and India watchlists, watchlist CSV import and per-user watchlist column preferences in the
+shared `folio_pro` PostgreSQL database.
 
-- `.github/instructions/coding-standards.instructions.md`
-- `.github/instructions/naming-and-readability.instructions.md`
-- `.github/instructions/architecture.instructions.md`
-- `.github/instructions/spring-boot.instructions.md`
-- `.github/instructions/logging.instructions.md`
+For every code change, follow:
 
-Reusable workflows are in `.github/skills/*/SKILL.md`. Use the relevant skill for architecture,
-JPA, REST API, testing, or future external market-data integration work. These skills supplement
-the repository-wide instructions.
+- `.github/instructions/project.instructions.md`: this repository's packages, reference classes,
+  Flyway and market-separation rules, docs paths and final checks. Edited here.
+- Shared standards, copied from https://github.com/omkarchorghe16/dev-standards (do not edit them
+  here; change them there and run its `sync.sh`):
+  - `.github/instructions/change-hygiene.instructions.md`
+  - `.github/instructions/coding-standards.instructions.md`
+  - `.github/instructions/naming-and-readability.instructions.md`
+  - `.github/instructions/architecture.instructions.md`
+  - `.github/instructions/spring-boot.instructions.md`
+  - `.github/instructions/logging.instructions.md`
 
-Keep changes focused, preserve existing behavior unless a behavior change is requested, and add or
-update tests for changed behavior. PostgreSQL is the authoritative application database and H2 is
-for tests. Every Flyway migration that changes a table must be mirrored in
-`src/test/resources/test-schema.sql`, or the H2 tests will not match production. Keep USA and India watchlist persistence separate. Never commit credentials, log
-secrets, or expose private runtime configuration.
-
-For user-visible or operational changes, update `README.md` and directly related documentation,
-including OpenAPI, Postman, configuration, Docker, and Kubernetes examples where applicable.
+Reusable workflows are in `.github/skills/*/SKILL.md` (REST API, JPA, architecture, logging,
+testing, providers). Use the relevant skill; the instruction files stay authoritative for rules
+that apply to every change. `project.instructions.md` wins where it is more specific.

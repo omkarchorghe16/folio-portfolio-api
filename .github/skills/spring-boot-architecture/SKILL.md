@@ -1,51 +1,55 @@
 ---
 name: spring-boot-architecture
-description: Change application architecture, boundaries, cross-cutting behavior, or persistence topology in Folio Pro.
+description: Plan or change application architecture, layer and package boundaries, cross-cutting behavior, persistence topology or deployment topology in a Spring Boot service.
 ---
+
+<!-- Managed by dev-standards (stacks/java-spring/skills/spring-boot-architecture/SKILL.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
 
 # Spring Boot architecture workflow
 
-Use this skill when changes span layers, move responsibilities, alter shared conventions, or
-introduce a subsystem.
-
-## Current application boundaries
-
-- `controller` owns HTTP mappings, validation, and response construction.
-- `service` coordinates use cases and transaction boundaries.
-- `model` contains JPA persistence entities; `repository` contains Spring Data access.
-- PostgreSQL is the application datasource; H2 is for tests.
-- USA and India watchlists/items have separate persisted tables and market-specific relationships.
-- Docker Compose is the local container workflow. Optional `k8s/` and
-  `scripts/deploy-local-k8s.sh` target Docker Desktop Kubernetes only.
+Use this skill when a change spans several layers or packages, moves responsibilities, changes
+application-wide conventions, affects deployment topology or introduces a new subsystem. The
+repository's current boundaries (packages, shared database, deployment) are described in
+`.github/instructions/project.instructions.md`.
 
 ## Architecture rules
 
-- Preserve one-way dependencies: controllers -> services -> repositories.
-- Keep public DTOs distinct from JPA entities and keep persistence logic out of controllers.
-- Use service-level transaction boundaries for database workflows.
-- Treat schema changes as explicit Flyway migrations and preserve intended foreign keys,
-  uniqueness, and lifecycle behavior.
-- Keep credentials outside tracked files and redact them from logs and error responses.
-- Keep controller/service lifecycle telemetry in `LoggingAspect` and final error reporting in
-  `ApiExceptionHandler`; avoid duplicate logs and never log method arguments or request bodies.
-- Do not introduce a new datasource, migration framework, security mechanism, or architecture
-  pattern without confirming compatibility and intended behavior.
-- Keep OpenAPI, Postman, README, and deployment documentation synchronized with behavior.
+- Preserve one-way dependencies: controllers -> services/features -> clients/repositories. Keep
+  infrastructure responsibilities out of controllers and entities.
+- Keep provider transport and response interpretation behind provider clients, and channel
+  transport (Slack, Telegram, email) behind notifier components.
+- Use typed `@ConfigurationProperties` for settings. Keep credentials out of tracked files and
+  redact them from logs and error responses.
+- Put transaction boundaries at the service layer and keep slow network calls outside them unless
+  atomicity requires otherwise.
+- Treat quotas, timeouts, retries, caching, idempotency and failure behavior as explicit design
+  constraints.
+- Keep public DTOs distinct from JPA entities.
+- When two services share one database, keep table names unique across them and never alter or
+  map the other service's tables.
+- Keep a scheduler-bearing service at one instance unless scheduled work is coordinated across
+  instances.
+- Do not introduce another datasource, production H2 mirror, migration framework, security
+  mechanism or architecture pattern without confirming the trade-off with the owner.
 
 ## Implementation sequence
 
-1. Trace the relevant controller/service/repository/entity/configuration and tests.
-2. Select the narrowest layer that owns the requested behavior.
-3. Identify impacts on schema, transactions, API contracts, runtime config, and deployment.
-4. Implement a focused change and add tests at affected boundaries.
-5. Review the skills under `.github/skills/` and update those affected by the change.
-6. Update README and directly related API, configuration, or operational docs.
-7. Run the smallest relevant tests/build and report remaining environment limitations.
+1. Trace the end-to-end flow through the affected controllers, services, clients, configuration,
+   models, repositories, tests and docs before editing.
+2. Name the existing boundary and the smallest layer that owns the requested behavior; keep the
+   change there and avoid unrelated refactoring.
+3. Identify impacts on configuration, schema, transactions, public API, secrets, scheduling,
+   provider limits and observability.
+4. Implement the smallest coherent change and add tests at the affected boundaries.
+5. Review every skill in `.github/skills/` and update the affected ones.
+6. Update `README.md` and directly related API, configuration, architecture or deployment docs.
+7. Run the smallest relevant tests/build and report any decision that needs owner input.
 
 ## Review checklist
 
-- Responsibilities follow the existing layers.
-- Schema and transaction semantics are explicit.
-- Market-specific data remains in its matching tables.
-- Tests do not depend on live services.
-- Relevant docs and skills match implemented behavior; no secrets are exposed.
+- Responsibilities and package placement match the existing layers.
+- Configuration is typed and safe by default.
+- Schema and transaction semantics are explicit; PostgreSQL remains authoritative.
+- Network failures, quotas and external side effects have defined behavior.
+- Tests cover the boundaries without live external dependencies.
+- README, docs and skills match the code; no secrets are exposed.

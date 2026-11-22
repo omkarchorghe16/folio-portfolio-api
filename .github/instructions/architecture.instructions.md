@@ -2,23 +2,31 @@
 applyTo: "**/*.java"
 ---
 
+<!-- Managed by dev-standards (stacks/java-spring/instructions/architecture.instructions.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
+
 # Architecture standards
 
-- Keep the application layered: `controller` handles HTTP; `service` coordinates use cases and
-  transactions; `model` and `repository` own persistence.
-- Controllers must not call repositories directly. Keep JPA entities focused on persistence, not
-  HTTP behavior or orchestration.
-- Keep dependencies one-way: controllers -> services -> repositories; avoid cyclic dependencies.
-- Use service-level transaction boundaries for multi-step persistence workflows.
-- PostgreSQL is the production/application datasource; H2 is used for tests only.
-- USA and India watchlists and items are stored in their corresponding tables. Keep those database
-  relationships and Flyway migrations explicit.
-- Keep public transport DTOs separate from persistence entities.
-- Keep configuration in Spring configuration files/properties and environment variables; never
-  hard-code credentials.
-- Keep controller/service lifecycle telemetry in `LoggingAspect`; exception handlers own final API
-  error logging. Do not add duplicate per-method logs or swallow exceptions.
-- Keep Docker Compose as the local container workflow and Kubernetes manifests as an optional
-  Docker Desktop-only workflow. Do not commit Kubernetes Secrets or local credentials.
-- For behavior changes, review the skills under `.github/skills/`, update affected skills and
-  directly related docs, and keep README, OpenAPI, Postman, and deployment config consistent.
+- Keep the application layered: `controller` handles HTTP; `service` (or a feature package)
+  coordinates use cases and transactions; provider clients call external APIs; `model` and
+  `repository` own JPA entities and database access.
+- Controllers must not call repositories or provider clients directly; delegate through a service.
+- Keep dependencies one-way: controllers -> services -> clients/repositories. Avoid cycles between
+  web, service, client and persistence layers.
+- Keep provider-specific request building, response parsing and error translation in that
+  provider's client.
+- Keep JPA entities focused on persistence, not HTTP behavior or orchestration. Keep public
+  transport DTOs separate from entities.
+- Put transaction boundaries on service workflows, not controllers or repositories. Do not hold a
+  database transaction open across slow provider or notification calls unless atomicity needs it.
+- Normalize and validate identifiers (for example stock symbols) once at the service boundary.
+- Bind configuration through typed `@ConfigurationProperties` classes and document defaults and
+  environment variable names in `application.yml`. Never hard-code credentials.
+- PostgreSQL is the application datasource; H2 is for tests only. Do not add a production H2
+  mirror, another datasource, migration framework, security mechanism or new architecture pattern
+  without an explicit decision.
+- Keep schema changes explicit. If the project uses Flyway, every schema change is a new migration.
+- Keep provider schemas and persistence tables separate when fields or units differ.
+- Docker Compose is the default local container workflow. Kubernetes manifests, when present, are
+  optional and local-only; never commit Kubernetes Secrets or local credentials.
+- Keep `README.md` and relevant API, configuration and operational documentation synchronized with
+  implemented behavior. Public API changes also need synchronized OpenAPI and Postman examples.

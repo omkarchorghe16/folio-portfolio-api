@@ -10,12 +10,22 @@ calls its `/api/v1/*` endpoints. `../news-scheduler-svc` (port 8082) shares the 
 Before any code change, use the `java-coding-standards` skill (`.claude/skills/java-coding-standards/SKILL.md`).
 It loads the project rules, which live in `.github/` and are shared with GitHub Copilot:
 
-- `.github/copilot-instructions.md`: repository rules, including the documentation and skill sync policy.
-- `.github/instructions/*.instructions.md`: coding standards, naming and readability, architecture,
-  Spring Boot, logging.
+- `.github/copilot-instructions.md`: repository overview and the list of rule files.
+- `.github/instructions/project.instructions.md`: rules for this repository only (packages, Flyway,
+  USA/India separation, docs paths, final checks).
+- `.github/instructions/*.instructions.md` (the rest): shared change-hygiene, coding standards,
+  naming and readability, architecture, Spring Boot and logging rules.
 - `.github/skills/*/SKILL.md`: workflows for REST APIs, JPA, architecture, logging, tests and providers.
 
-When a rule changes, edit the `.github/` file so both tools stay in sync.
+### Where to change a rule
+
+- Rules for this repository only: edit `project.instructions.md` (or `copilot-instructions.md`) here.
+- Shared rules and skills: every file that starts with a `Managed by dev-standards` comment, plus
+  `.claude/skills/java-coding-standards`, is copied from
+  https://github.com/omkarchorghe16/dev-standards (cloned at `../dev-standards`) and listed in
+  `.github/dev-standards.lock`. Do not edit those copies here. Change them in `../dev-standards`, then
+  run `./sync.sh --all` there and commit the result in each repository.
+- `../dev-standards/sync.sh --check .` (run from this repository) reports drift.
 
 ## Layout
 

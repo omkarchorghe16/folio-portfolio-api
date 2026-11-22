@@ -1,60 +1,61 @@
 ---
 name: java-coding-standards
-description: Coding, naming, architecture and logging standards for invesment-management-svc. Use before writing, changing, reviewing or renaming any Java code, Flyway migration, or REST endpoint in this repository.
+description: Coding, naming, architecture, logging and testing standards for this Spring Boot repository. Use before writing, changing, reviewing or renaming any Java code, schema migration, REST endpoint, provider client, scheduler or notifier.
 ---
 
-# Java coding standards for invesment-management-svc
+<!-- Managed by dev-standards (stacks/java-spring/claude-skills/java-coding-standards/SKILL.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
 
-This skill applies the project's rules to Claude Code. The rules themselves live in `.github/` and
-are shared with GitHub Copilot, so there is one source of truth. Do not copy them here; update the
-`.github/` file instead.
+# Java coding standards
+
+This skill applies the repository's rules to Claude Code. The rules live in `.github/` and are
+shared with GitHub Copilot, so there is one source of truth. Do not copy them here.
 
 ## 1. Load the rules
 
-Read every file below before writing code. All of them apply to every Java change.
+Read these before writing code:
 
-- `.github/copilot-instructions.md`: repository rules and documentation sync policy
-- `.github/instructions/coding-standards.instructions.md`
-- `.github/instructions/naming-and-readability.instructions.md`: class, method and field names; layout
-- `.github/instructions/architecture.instructions.md`
-- `.github/instructions/spring-boot.instructions.md`
-- `.github/instructions/logging.instructions.md`
+- `.github/copilot-instructions.md`: repository overview and rules.
+- Every `.github/instructions/*.instructions.md` file whose `applyTo` matches the files you will
+  change. For Java that is at least `change-hygiene`, `coding-standards`,
+  `naming-and-readability`, `architecture`, `spring-boot`, `logging` and `project`.
+  `project.instructions.md` holds this repository's packages, reference classes and exceptions,
+  and wins where it is more specific.
 
 Then read the task-specific workflow from `.github/skills/`:
 
 | Task | Skill |
 |---|---|
-| New or changed endpoint, DTO, status code | `.github/skills/spring-boot-rest-api/SKILL.md` |
-| Entity, repository, Flyway migration | `.github/skills/spring-boot-jpa/SKILL.md` |
-| New package, layer or cross-cutting design | `.github/skills/spring-boot-architecture/SKILL.md` |
-| Logging or error handling | `.github/skills/spring-boot-logging/SKILL.md` |
-| Tests | `.github/skills/spring-boot-testing/SKILL.md` |
-| External market-data provider | `.github/skills/spring-boot-provider-integration/SKILL.md` |
+| New or changed endpoint, DTO, status code | `spring-boot-rest-api` |
+| Entity, repository, schema migration, transaction | `spring-boot-jpa` |
+| New package, layer or cross-cutting design | `spring-boot-architecture` |
+| Logging or error handling | `spring-boot-logging` |
+| Third-party HTTP provider | `spring-boot-provider-integration` |
+| Tests | `spring-boot-testing` |
+
+Also read any other skill in `.github/skills/` whose description matches the task; repositories
+add their own (for example scheduling and notifications).
 
 ## 2. Look at nearby code
 
-Open the closest existing controller, service and test for the same feature and match them.
-Current reference classes are `PortfolioController` and `PortfolioService`, `WatchlistController`
-and `WatchlistService`, and `ApiIntegrationTest`.
+Open the closest existing controller, service, client and test for the same feature (the reference
+classes in `project.instructions.md`) and match them.
 
 ## 3. Write the code
 
-- Put code in the feature's own controller and service. Create `<Feature>Controller` and
-  `<Feature>Service` for a new resource instead of adding to an unrelated class.
-- Controller → service → repository, never controller → repository.
-- Schema changes go in a new `src/main/resources/db/migration/V<next>__<description>.sql`. Never
-  edit a migration that has already run. Mirror the change in `src/test/resources/test-schema.sql`.
-- Keep USA and India persistence in separate tables and entities.
+- Put code in the feature's or provider's own classes; create `<Resource>Controller`,
+  `<Resource>Service` or `<Provider><Resource>Client` instead of adding to unrelated ones.
+- Controller -> service -> client or repository, never controller -> client or repository.
+- Tests never call live providers or a developer's database.
 
 ## 4. Check before finishing
 
-- [ ] Class, method and field names follow `naming-and-readability.instructions.md`.
-- [ ] Controller method names match the service methods they call.
-- [ ] No one-line method bodies, single-letter parameters or generic class names.
-- [ ] No credentials, secrets or request bodies in code or logs.
-- [ ] Tests added or updated for changed behavior, and `mvn test` passes.
-- [ ] README, `docs/API_ENDPOINTS.md`, OpenAPI annotations and the Postman collection are updated
-      when the API or its behavior changed.
-- [ ] Every `.github/skills/*` file affected by the change is updated.
-- [ ] If an endpoint contract changed, the Angular app (`../personal-wealth-management-angular`,
-      `src/app/core/services/`) is checked and updated.
+- [ ] Names and layout follow `naming-and-readability.instructions.md`.
+- [ ] No one-line method bodies, single-letter parameters, generic class names or untyped
+      (`JsonNode`, `Map`) responses in new endpoints.
+- [ ] No credentials, tokens, credential-bearing URLs or payloads in code, tests, Postman or logs.
+- [ ] Tests added or updated, and `mvn test` passes (actually run).
+- [ ] README, OpenAPI, Postman and config examples updated when the API or behavior changed.
+- [ ] Every affected `.github/skills/*` file updated.
+- [ ] The project-specific checks in `project.instructions.md` are done.
+- [ ] Shared files (marked `Managed by dev-standards`) were not edited here; shared rule changes go
+      to the `dev-standards` repository.
