@@ -173,7 +173,8 @@
               "raw": "{{baseUrl}}/api/v1/watchlists",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "watchlists"]
-            }
+            },
+            "description": "market accepts US, USA or India. If the user already has a watchlist with this name in that market (case-insensitive), the existing watchlist is returned and no new one is created."
           }
         },
         {
@@ -199,6 +200,100 @@
               "query": [{"key": "market", "value": "{{importMarket}}"}, {"key": "userId", "value": "{{userId}}"}]
             },
             "description": "Set importMarket to USA (or US) or India and userId to the owner. Select the CSV file in Body > form-data > file after importing this collection. Imports only add: a column named like one of the user's existing watchlists in that market adds its new symbols there and skips ones already present; other columns create new watchlists."
+          }
+        },
+        {
+          "name": "Export watchlists as CSV (all in market)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watchlists/export?market={{importMarket}}&userId={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watchlists", "export"],
+              "query": [{"key": "market", "value": "{{importMarket}}"}, {"key": "userId", "value": "{{userId}}"}]
+            },
+            "description": "Downloads every watchlist the user has in the market as CSV. Row 1 holds the watchlist names (one per column); rows 2 onwards hold each watchlist's ticker symbols in its column. Cells that would start a spreadsheet formula (=, +, -, @) get a leading apostrophe so they open as plain text. The file can be imported again unchanged. Use Send and Download to save it."
+          }
+        },
+        {
+          "name": "Export one watchlist as CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watchlists/export?market={{importMarket}}&userId={{userId}}&watchlistId={{watchlistId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watchlists", "export"],
+              "query": [{"key": "market", "value": "{{importMarket}}"}, {"key": "userId", "value": "{{userId}}"}, {"key": "watchlistId", "value": "{{watchlistId}}"}]
+            },
+            "description": "Same CSV format for a single watchlist. 404 if watchlistId is not one of the user's watchlists in that market."
+          }
+        },
+        {
+          "name": "Add stocks to USA watchlist (owner-checked)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\"symbol\": \"AAPL\", \"name\": \"Apple Inc.\"},\n    {\"symbol\": \"BRK.B\"}\n  ]\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watchlists/us/{{watchlistId}}/items?userId={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watchlists", "us", "{{watchlistId}}", "items"],
+              "query": [{"key": "userId", "value": "{{userId}}"}]
+            },
+            "description": "Saves 1-100 stocks into watchlist_items_usa. 201 with the saved items; 400 on a duplicate symbol; 404 for an India list or another user's list."
+          }
+        },
+        {
+          "name": "Remove stock from USA watchlist (owner-checked)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watchlists/us/{{watchlistId}}/items/AAPL?userId={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watchlists", "us", "{{watchlistId}}", "items", "AAPL"],
+              "query": [{"key": "userId", "value": "{{userId}}"}]
+            },
+            "description": "Deletes one stock from a USA watchlist owned by userId. 204, or 404 if the list or symbol is not found."
+          }
+        },
+        {
+          "name": "Add stocks to India watchlist (owner-checked)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\"symbol\": \"RELIANCE\"},\n    {\"symbol\": \"M&M\"}\n  ]\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watchlists/india/{{watchlistId}}/items?userId={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watchlists", "india", "{{watchlistId}}", "items"],
+              "query": [{"key": "userId", "value": "{{userId}}"}]
+            },
+            "description": "Saves 1-100 NSE stocks into watchlist_items_india. Needs an India watchlistId. 201 with the saved items; 400 on a duplicate symbol; 404 for a USA list or another user's list."
+          }
+        },
+        {
+          "name": "Remove stock from India watchlist (owner-checked)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watchlists/india/{{watchlistId}}/items/M%26M?userId={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watchlists", "india", "{{watchlistId}}", "items", "M%26M"],
+              "query": [{"key": "userId", "value": "{{userId}}"}]
+            },
+            "description": "Deletes one stock from an India watchlist owned by userId. URL-encode & as %26. 204, or 404 if the list or symbol is not found."
           }
         },
         {
@@ -232,7 +327,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "watchlists", "{{watchlistId}}"]
             },
-            "description": "The market must match the existing watchlist. Change both this request body and the watchlist if testing India."
+            "description": "The market must match the existing watchlist. Change both this request body and the watchlist if testing India. Returns 400 if the owner already has another watchlist with that name in the market."
           }
         },
         {

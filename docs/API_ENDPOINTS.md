@@ -78,7 +78,7 @@ The legacy `user_preferences` table and its `/api/v1/preferences` endpoint were 
 
 ---
 
-## 2. Watchlist endpoints — `WatchlistController`
+## 2. Watchlist endpoints — `WatchlistController` and `WatchlistExportController`
 
 Shared DTOs (`ApiDtos`):
 
@@ -207,7 +207,7 @@ Body (`BulkItemsRequest`): `{ "items": [ { "symbol": "AAPL", "name": "Apple", "i
 | Field | Rules |
 |---|---|
 | `items` | 1–100 entries |
-| `symbol` | required, `[A-Za-z0-9.-]{1,15}`, stored upper-case |
+| `symbol` | required, `[A-Za-z0-9.&$-]{1,15}` (e.g. `M&M`, `BRK.B`, `ABR$D`), stored upper-case |
 | `name` | optional, ≤160. Defaults to the upper-cased symbol if blank |
 | `isFavorite` | optional, default `false` |
 
@@ -257,7 +257,8 @@ NVDA,
 
 Validation runs on the whole file before anything is saved:
 * names are 1–40 chars and unique within the file (case-insensitive)
-* symbols match `[A-Za-z0-9.&-]{1,15}` (so Indian tickers like `M&M` work) and are unique within their column
+* symbols match `[A-Za-z0-9.&$-]{1,15}`, the same rule as the item endpoints (so `M&M` and `ABR$D` work), and are unique within their column
+* a leading apostrophe added by the export's formula protection (`'=...`, `'+...`, `'-...`, `'@...`) is removed from names and symbols
 * rows can't have more columns than the header row
 * quoting follows RFC 4180, and a UTF-8 BOM is accepted
 
@@ -289,6 +290,88 @@ Errors: 400 empty file / parse or validation error / bad market or userId, 413 f
 
 ```bash
 curl -X POST 'localhost:8081/api/v1/watchlists/import?market=USA&userId=1' -F 'file=@watchlists.csv'
+```
+
+### 2.10 Market-specific item endpoints — `/watchlists/us/...` and `/watchlists/india/...`
+
+These are the item endpoints the Angular app uses. Unlike `/watchlists/{id}/items`, they check the
+market **and** the owner: a watchlist that is in the other market or belongs to another `userId` is
+reported as 404.
+
+| Method & path | Behavior |
+|---|---|
+| `POST /api/v1/watchlists/india/{id}/items?userId=1` | Body `BulkItemsRequest` (1–100 items). Saves into `watchlist_items_india`. All or none: a symbol repeated in the request or already in the list returns 400. **201 Created** with the saved items |
+| `DELETE /api/v1/watchlists/india/{id}/items/{symbol}?userId=1` | Deletes one stock from `watchlist_items_india`; symbol matched case-insensitively. **204**, or 404 if the list or symbol is not found |
+| `POST /api/v1/watchlists/us/{id}/items?userId=1` | Same as the India add, into `watchlist_items_usa` |
+| `DELETE /api/v1/watchlists/us/{id}/items/{symbol}?userId=1` | Same as the India delete, from `watchlist_items_usa` |
+
+`userId` defaults to 1. Symbols match `[A-Za-z0-9.&$-]{1,15}`, so `M&M`, `BRK.B` and `ABR$D` are
+valid; URL-encode `&` and `$` in the path (`M%26M`).
+
+**Tables:** a lookup of the watchlist by id in the market's own table, filtered by `user_id` → per
+item, a duplicate-check SELECT and an INSERT (add) or one DELETE (remove) on the market's items table.
+
+```bash
+curl -X POST 'localhost:8081/api/v1/watchlists/india/42/items?userId=1' -H 'Content-Type: application/json' \
+  -d '{"items":[{"symbol":"RELIANCE"},{"symbol":"M&M"}]}'
+curl -X DELETE 'localhost:8081/api/v1/watchlists/india/42/items/M%26M?userId=1'
+```
+
+### 2.11 `GET /api/v1/watchlists/export` — download watchlists as CSV (`WatchlistExportController`)
+
+| Query param | Default | Rules |
+|---|---|---|
+| `market` | — (required) | `US`, `USA` or `India`, case-insensitive |
+| `userId` | 1 | positive; only this user's watchlists are exported |
+| `watchlistId` | — (all) | positive. Export just this watchlist; omit it to export every watchlist the user has in the market |
+
+**File format** — the same column-oriented layout the import reads, so a file can be exported and
+imported again unchanged:
+
+* **Row 1** holds the watchlist names, one per column, oldest watchlist first.
+* **Rows 2 onwards** hold each watchlist's ticker symbols in its own column, in the order they were
+  added. Shorter columns are padded with empty cells.
+
+Example for a user with three US watchlists:
+
+```csv
+Tech,Banks,Energy
+AAPL,JPM,XOM
+MSFT,BAC,
+NVDA,,
+```
+
+| Column | Row 1 (name) | Rows 2+ (tickers) |
+|---|---|---|
+| A | `Tech` | `AAPL`, `MSFT`, `NVDA` |
+| B | `Banks` | `JPM`, `BAC` |
+| C | `Energy` | `XOM` |
+
+Other details:
+
+* Only ticker symbols are exported. Item display names and favorite stars are not.
+* UTF-8 with a byte-order mark (so Excel opens it correctly) and `\r\n` line endings. The import
+  ignores the byte-order mark.
+* RFC 4180 quoting: a cell containing a comma, quote or line break is wrapped in quotes and inner
+  quotes are doubled, for example `"Core, India"`.
+* **Every cell is plain text, never a formula.** A cell that starts with `=`, `+`, `-`, `@`, tab or
+  carriage return (for example a watchlist named `=HYPERLINK("http://x")`) gets a leading apostrophe
+  (`'=HYPERLINK(...)`), which Excel and Google Sheets show as ordinary text instead of a link or
+  formula. The import removes that apostrophe, so the name is restored exactly.
+* File name, sent in `Content-Disposition: attachment`: `<market>-<watchlist-name>.csv` for one
+  watchlist (`india-core-india.csv`) or `<market>-watchlists.csv` for all. The header is listed in CORS
+  `exposedHeaders` so the browser app can read it.
+
+Response: **200** `text/csv;charset=UTF-8`. Errors: **400** invalid `market`/`userId`/`watchlistId`;
+**404** `watchlistId` is not one of this user's watchlists in that market.
+
+**Tables (`WatchlistExportService`, read-only transaction):** one SELECT of the user's watchlists in
+`watchlists_usa` or `watchlists_india` → one SELECT per exported watchlist on its items table, ordered
+by `id`.
+
+```bash
+curl -OJ 'localhost:8081/api/v1/watchlists/export?market=USA&userId=1'                 # all US lists
+curl -OJ 'localhost:8081/api/v1/watchlists/export?market=India&userId=1&watchlistId=42' # one list
 ```
 
 ---
@@ -346,7 +429,12 @@ Validation: 1–100 columns; `columnKey` matches `[A-Za-z0-9_]+` (≤ 50 chars) 
    how many pages of items exist.
 3. **Responses always use `US`.** Every endpoint accepts `US`, `USA` or `India` (case-insensitive), but stored and returned values are `US` and `India`.
 4. **List endpoint ignores `userId`.** `user_id` is stored on US and India watchlists, but there is no filter by owner.
-7. **Item symbol rules differ from import.** CSV import accepts `&` (e.g. `M&M`), but `POST /watchlists/{id}/items` and `PUT /watchlists/{id}/items/{symbol}` validate with `[A-Za-z0-9.-]{1,15}`, so `M&M` is rejected there.
+7. **Export after older duplicates.** A user who still has two same-named watchlists from before
+   the one-name-per-user rule gets that name twice in the export's first row, and importing that
+   file fails with *Duplicate watchlist name*. Rename or delete one of them first.
+8. **Export with no watchlists** returns 200 with only an empty first row; importing such a file fails.
+9. **Export loads items with one query per watchlist.** `findByWatchlistIdInOrderByIdAsc` could load
+   all of them in one query.
 5. **N+1 patterns:** `GET /portfolios` (holdings per portfolio), bulk add items (one duplicate-check
    SELECT per item), and delete watchlist (derived delete loads the items, then deletes them one at a time; the DB cascade
    would do this in a single statement).

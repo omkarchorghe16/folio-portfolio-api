@@ -348,6 +348,45 @@ class ApiIntegrationTest {
         return mapper.readTree(response).get("id").asLong();
     }
 
+    @Test
+    void exportWritesNamesInFirstRowTickersBelowAndFormulasAsPlainText() throws Exception {
+        long tech = createWatchlistId("Tech", "US", 21);
+        long formula = createWatchlistId("=HYPERLINK(\\\"http://x\\\")", "US", 21);
+        long banks = createWatchlistId("Banks", "US", 21);
+        addUsItems(tech, 21, "AAPL", "MSFT", "NVDA");
+        addUsItems(formula, 21, "IBM");
+        addUsItems(banks, 21, "JPM", "BAC");
+
+        var response = mvc.perform(get("/api/v1/watchlists/export").param("market", "USA").param("userId", "21"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse();
+        response.setCharacterEncoding("UTF-8");
+        String csv = response.getContentAsString();
+
+        // Row 1: one watchlist name per column. Rows 2+: each watchlist's tickers in its own column.
+        org.junit.jupiter.api.Assertions.assertEquals("\uFEFF"
+                + "Tech,\"'=HYPERLINK(\"\"http://x\"\")\",Banks\r\n"
+                + "AAPL,IBM,JPM\r\n"
+                + "MSFT,,BAC\r\n"
+                + "NVDA,,\r\n", csv);
+
+        // Importing the file for another user restores the original name without the apostrophe.
+        MockMultipartFile file = new MockMultipartFile("file", "export.csv", "text/csv",
+                csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mvc.perform(multipart("/api/v1/watchlists/import?market=US&userId=22").file(file))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.watchlistNames[1]").value("=HYPERLINK(\"http://x\")"));
+    }
+
+    private void addUsItems(long watchlistId, long userId, String... symbols) throws Exception {
+        String items = java.util.Arrays.stream(symbols)
+                .map(symbol -> "{\"symbol\":\"" + symbol + "\"}")
+                .collect(java.util.stream.Collectors.joining(","));
+        mvc.perform(post("/api/v1/watchlists/us/" + watchlistId + "/items").param("userId", String.valueOf(userId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"items\":[" + items + "]}"))
+                .andExpect(status().isCreated());
+    }
+
     private org.springframework.test.web.servlet.ResultActions importCsv(String market, long userId, String csv)
             throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "watchlists.csv", "text/csv",
@@ -355,4 +394,45 @@ class ApiIntegrationTest {
         return mvc.perform(multipart("/api/v1/watchlists/import")
                 .file(file).param("market", market).param("userId", String.valueOf(userId)));
     }
+ @Test void exportsWatchlistsInImportFormatAndRoundTrips() throws Exception {
+  // User 7 has only these lists, so "all watchlists" output is predictable.
+  long first=createList("Core, India",7), second=createList("Small \"caps\"",7);
+  mvc.perform(post("/api/v1/watchlists/india/"+first+"/items?userId=7").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"RELIANCE\"},{\"symbol\":\"M&M\"},{\"symbol\":\"TCS\"}]}")).andExpect(status().isCreated());
+  mvc.perform(post("/api/v1/watchlists/india/"+second+"/items?userId=7").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":[{\"symbol\":\"IRFC\"}]}")).andExpect(status().isCreated());
+
+  var one=mvc.perform(get("/api/v1/watchlists/export?market=India&userId=7&watchlistId="+first))
+    .andExpect(status().isOk())
+    .andExpect(header().string("Content-Type",org.hamcrest.Matchers.startsWith("text/csv")))
+    .andExpect(header().string("Content-Disposition",org.hamcrest.Matchers.containsString("india-core-india.csv")))
+    .andReturn().getResponse();
+  one.setCharacterEncoding("UTF-8");
+  org.junit.jupiter.api.Assertions.assertEquals("\uFEFF\"Core, India\"\r\nRELIANCE\r\nM&M\r\nTCS\r\n",one.getContentAsString());
+
+  var all=mvc.perform(get("/api/v1/watchlists/export?market=India&userId=7")).andExpect(status().isOk()).andReturn().getResponse();
+  all.setCharacterEncoding("UTF-8");
+  String csv=all.getContentAsString();
+  org.junit.jupiter.api.Assertions.assertEquals(
+   "\uFEFF\"Core, India\",\"Small \"\"caps\"\"\"\r\nRELIANCE,IRFC\r\nM&M,\r\nTCS,\r\n",csv);
+
+  // Another user, the other market, and an unknown id are 404; a bad market is 400.
+  mvc.perform(get("/api/v1/watchlists/export?market=India&userId=8&watchlistId="+first)).andExpect(status().isNotFound());
+  mvc.perform(get("/api/v1/watchlists/export?market=US&userId=7&watchlistId="+first)).andExpect(status().isNotFound());
+  mvc.perform(get("/api/v1/watchlists/export?market=Mars&userId=7")).andExpect(status().isBadRequest());
+
+  // Importing the export for a new user recreates the same lists and symbols.
+  MockMultipartFile file=new MockMultipartFile("file","export.csv","text/csv",csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  mvc.perform(multipart("/api/v1/watchlists/import?market=India&userId=9").file(file))
+   .andExpect(status().isCreated()).andExpect(jsonPath("$.watchlistsCreated").value(2)).andExpect(jsonPath("$.itemsCreated").value(4));
+  var reexport=mvc.perform(get("/api/v1/watchlists/export?market=India&userId=9")).andExpect(status().isOk()).andReturn().getResponse();
+  reexport.setCharacterEncoding("UTF-8");
+  org.junit.jupiter.api.Assertions.assertEquals(csv,reexport.getContentAsString());
+ }
+ private long createList(String name,long userId) throws Exception {
+  String body=mapper.writeValueAsString(java.util.Map.of("name",name,"market","India","userId",userId));
+  String created=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON).content(body))
+    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+  return mapper.readTree(created).get("id").asLong();
+ }
 }

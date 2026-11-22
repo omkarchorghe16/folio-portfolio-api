@@ -29,8 +29,8 @@ import java.util.*;
 public class WatchlistImportService {
     private static final int MAX_WATCHLIST_NAME_LENGTH = 40;
     private static final int MAX_SYMBOL_LENGTH = 15;
-    /** Letters, digits, '.', '-' and '&' (Indian tickers such as M&M or M&MFIN.NS). */
-    private static final String SYMBOL_PATTERN = "[A-Za-z0-9.&-]{1,15}";
+    /** Same rule as items added through the API: '.', '-', '&' (M&M) and '$' (US preferreds such as ABR$D). */
+    private static final String SYMBOL_PATTERN = com.foliopro.api.dto.ApiDtos.WatchlistItemRequest.SYMBOL_PATTERN;
 
     private final WatchlistRepository watchlistRepository;
     private final UsaWatchlistItemRepository usaItemRepository;
@@ -157,7 +157,7 @@ public class WatchlistImportService {
         List<WatchlistData> watchlistData = new ArrayList<>(headers.size());
         Set<String> names = new HashSet<>();
         for (String header : headers) {
-            String name = header.trim();
+            String name = withoutPlainTextPrefix(header.trim());
             if (name.isEmpty() || name.length() > MAX_WATCHLIST_NAME_LENGTH) {
                 throw new IllegalArgumentException("Watchlist names must contain 1 to "
                         + MAX_WATCHLIST_NAME_LENGTH + " characters");
@@ -175,7 +175,7 @@ public class WatchlistImportService {
                         + " has more columns than the watchlist header row");
             }
             for (int column = 0; column < row.size(); column++) {
-                String symbol = row.get(column).trim();
+                String symbol = withoutPlainTextPrefix(row.get(column).trim());
                 if (symbol.isEmpty()) {
                     continue;
                 }
@@ -268,6 +268,18 @@ public class WatchlistImportService {
             rows.add(row);
         }
         return rows;
+    }
+
+    /**
+     * Undoes the export's formula protection: "'=SUM(A1)" becomes "=SUM(A1)" again, so an exported file
+     * imports unchanged. An apostrophe before any other character is kept.
+     */
+    private static String withoutPlainTextPrefix(String cell) {
+        if (cell.length() > 1 && cell.charAt(0) == WatchlistExportService.PLAIN_TEXT_PREFIX
+                && WatchlistExportService.startsLikeFormula(cell.substring(1))) {
+            return cell.substring(1);
+        }
+        return cell;
     }
 
     private void addField(List<String> row, StringBuilder field) {

@@ -11,6 +11,8 @@ pages, `/watchlists/us` and `/watchlists/india`. Both call this service directly
 - `GET /watchlists?market=US|USA|India&size=100` (all pages) to fill the watchlist dropdown; favorites come first.
 - `PATCH /watchlists/{id}/favorite` when the user clicks the star in the dropdown.
 - `POST /watchlists/import?market=USA|India&userId=1` for "Import CSV".
+- `GET /watchlists/export?market=US|India&userId=1&watchlistId=…` for "Export CSV".
+- `POST`/`DELETE /watchlists/us/{id}/items` and `/watchlists/india/{id}/items` to add and remove stocks.
 - `GET`/`PUT /users/1/watchlist-column-preferences` for "Edit columns".
 
 Prices, market cap and fundamentals are **not** stored here. The UI loads them per symbol from
@@ -36,6 +38,7 @@ See [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) for a per-endpoint reference,
 | GET, PATCH, DELETE | `/watchlists/{id}` | Read with paginated items / rename (400 if the owner already has another watchlist with that name in the market) / delete |
 | PATCH | `/watchlists/{id}/favorite?userId=1` | Star or un-star a USA or India watchlist: body `{"isFavorite": true}` |
 | POST | `/watchlists/{id}/items` | Atomic bulk-add `{items:[...]}` |
+| GET | `/watchlists/export?market=US\|USA\|India&userId=1[&watchlistId=]` | CSV download in the import format: row 1 holds the watchlist names, one per column, and rows 2+ hold each watchlist's ticker symbols in its column. One list with `watchlistId`, else all of the user's lists in the market. Cells starting with `=`, `+`, `-` or `@` get a leading `'` so spreadsheets show them as plain text (never a formula or hyperlink); the import removes it. 404 if the list is not the user's in that market |
 | POST | `/watchlists/india/{id}/items?userId=1` | Atomic bulk-add of NSE stocks into `watchlist_items_india`; 201 with the saved items. 404 if the list is a USA list or belongs to another user; 400 on a duplicate symbol. Symbols may contain `. - & $` (e.g. `M&M`, `BRK.B`, `ABR$D`) |
 | PUT, DELETE | `/watchlists/{id}/items/{symbol}` | Update or remove one symbol |
 | DELETE | `/watchlists/india/{id}/items/{symbol}?userId=1` | Remove one stock from an India watchlist owned by the user (204). 404 for a USA list, another user's list, or a symbol not in the list |
@@ -83,7 +86,7 @@ Import `postman/Folio-Pro-API.postman_collection.json` and `postman/Folio-Pro-Lo
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-In the collection, the CSV import request uses `multipart/form-data`; choose the CSV file in its `file` form-data field. `importMarket` is `USA` by default; change it to `India` to write the imported lists to `watchlists_india`. Create portfolio/watchlist requests update `portfolioId` and `watchlistId` from their responses. Delete requests are explicitly marked destructive.
+In the collection, the CSV import request uses `multipart/form-data`; choose the CSV file in its `file` form-data field. `importMarket` is `USA` by default; change it to `India` to write the imported lists to `watchlists_india`. The two export requests use the same `importMarket` and `userId`; use **Send and Download** to save the CSV. Create portfolio/watchlist requests update `portfolioId` and `watchlistId` from their responses. Delete requests are explicitly marked destructive.
 
 ### Examples
 
@@ -93,6 +96,7 @@ curl -X POST http://localhost:8081/api/v1/watchlists -H 'Content-Type: applicati
   -d '{"name":"Long-term ideas","market":"US","userId":1}'
 curl -X POST 'http://localhost:8081/api/v1/watchlists/import?market=USA&userId=1' \
   -F 'file=@robinhood_watchlists_by_column.csv'
+curl -OJ 'http://localhost:8081/api/v1/watchlists/export?market=USA&userId=1'   # saves us-watchlists.csv
 curl -X POST http://localhost:8081/api/v1/watchlists/1/items -H 'Content-Type: application/json' \
   -d '{"items":[{"symbol":"AAPL","name":"Apple Inc.","isFavorite":true},{"symbol":"MSFT","name":"Microsoft","isFavorite":false}]}'
 curl -X PUT http://localhost:8081/api/v1/portfolios -H 'Content-Type: application/json' \
@@ -173,4 +177,4 @@ news-scheduler jobs, notification channels, or provider credentials into this ap
 
 ## Tests and limitations
 
-`mvn test` runs Spring integration tests against H2 (`src/test/resources/test-schema.sql`, which must be kept in step with the Flyway migrations). They cover CRUD, bulk duplicate handling, pagination, request validation, CSV import into both markets, favorites and their ordering, and column preferences. There is intentionally no authentication or multi-user authorization, and this API serves no market data or financial advice. Known gaps are listed in [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md#5-known-issues--improvement-notes).
+`mvn test` runs Spring integration tests against H2 (`src/test/resources/test-schema.sql`, which must be kept in step with the Flyway migrations). They cover CRUD, bulk duplicate handling, pagination, request validation, CSV import into both markets (including adding to existing same-named watchlists), CSV export and its round trip back through the import, one watchlist name per user and market, favorites and their ordering, and column preferences. There is intentionally no authentication or multi-user authorization, and this API serves no market data or financial advice. Known gaps are listed in [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md#5-known-issues--improvement-notes).
