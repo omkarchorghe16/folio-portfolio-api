@@ -1,4 +1,4 @@
-# Repository instructions: invesment-management-svc
+# Repository instructions: folio-portfolio-api
 
 Spring Boot (Java 21, Maven) API on port 8081 for the Folio Pro app. It owns portfolios, holdings,
 USA and India watchlists, watchlist CSV import and per-user watchlist column preferences in the

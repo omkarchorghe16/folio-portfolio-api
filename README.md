@@ -1,10 +1,10 @@
 # Folio Pro API
 
-Java 21 / Spring Boot REST backend for the Angular Folio Pro prototype. The frontend repository is `omkarchorghe16/personal-wealth-management-angular`; this API keeps its US/India watchlist workflow and DTO fields compatible with `wealth.models.ts`. It follows the same Java 21 / Spring Web / JPA / PostgreSQL / OpenAPI approach as `news-scheduler-svc`, and both services share the `folio_pro` database (this service owns its tables through Flyway).
+Java 21 / Spring Boot REST backend for the Angular Folio Pro prototype. The frontend repository is `omkarchorghe16/folio-pro-ui`; this API keeps its US/India watchlist workflow and DTO fields compatible with `wealth.models.ts`. It follows the same Java 21 / Spring Web / JPA / PostgreSQL / OpenAPI approach as `folio-market-feed-svc`, and both services share the `folio_pro` database (this service owns its tables through Flyway).
 
 ## How the Angular app uses this API
 
-The Folio Pro UI (`../personal-wealth-management-angular`, http://localhost:4200) has two watchlist
+The Folio Pro UI (`../folio-pro-ui`, http://localhost:4200) has two watchlist
 pages, `/watchlists/us` and `/watchlists/india`. Both call this service directly at
 `http://localhost:8081` (CORS origin `FRONTEND_ORIGIN`):
 
@@ -16,7 +16,7 @@ pages, `/watchlists/us` and `/watchlists/india`. Both call this service directly
 - `GET`/`PUT /users/1/watchlist-column-preferences` for "Edit columns".
 
 Prices, market cap and fundamentals are **not** stored here. The UI loads them per symbol from
-`news-scheduler-svc` (port 8082): FMP profiles for US, Tapetide profiles for India.
+`folio-market-feed-svc` (port 8082): FMP profiles for US, Tapetide profiles for India.
 
 Contract notes: IDs are numeric; pages are zero-based with `size` 1–100 (default 15); bulk item adds
 are atomic and duplicate symbols fail with 400. There is no authentication: `userId` defaults to `1`

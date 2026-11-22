@@ -1,9 +1,9 @@
-# invesment-management-svc — guide for Claude Code
+# folio-portfolio-api — guide for Claude Code
 
 Spring Boot (Java 21, Maven) API on port **8081** for the Folio Pro app. It owns portfolios,
 holdings, USA and India watchlists, watchlist CSV import and per-user watchlist column preferences,
-stored in the `folio_pro` PostgreSQL database. The Angular app (`../personal-wealth-management-angular`)
-calls its `/api/v1/*` endpoints. `../news-scheduler-svc` (port 8082) shares the same database.
+stored in the `folio_pro` PostgreSQL database. The Angular app (`../folio-pro-ui`)
+calls its `/api/v1/*` endpoints. `../folio-market-feed-svc` (port 8082) shares the same database.
 
 ## Rules
 

@@ -2,7 +2,7 @@
 applyTo: "**"
 ---
 
-# Project rules: invesment-management-svc
+# Project rules: folio-portfolio-api
 
 Repository-specific rules. The shared rules in the other `.github/instructions/` files (managed by
 dev-standards) also apply; where this file is more specific, it wins. Edit this file here.
@@ -35,7 +35,7 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 - USA and India watchlists and items are stored in separate tables and entities. USA items reference
   USA watchlists and India items reference India watchlists; never reintroduce a shared item table
   or a cross-market foreign key.
-- The `folio_pro` database is shared with `../news-scheduler-svc`, which creates its own tables in
+- The `folio_pro` database is shared with `../folio-market-feed-svc`, which creates its own tables in
   the same `public` schema through Hibernate. This service owns `portfolios`, `holdings`,
   `watchlists_*`, `watchlist_items_*` and `user_preferences`.
 
@@ -50,7 +50,7 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 ## Integrations
 
 - No external market-data provider is integrated here; market data lives in
-  `../news-scheduler-svc`. Use `spring-boot-provider-integration` only if one is explicitly added.
+  `../folio-market-feed-svc`. Use `spring-boot-provider-integration` only if one is explicitly added.
 
 ## Docs, API contract and deployment
 
@@ -65,5 +65,5 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 
 - [ ] `mvn test` passes.
 - [ ] Flyway migration mirrored in `test-schema.sql`.
-- [ ] If an endpoint contract changed, the Angular app (`../personal-wealth-management-angular`,
+- [ ] If an endpoint contract changed, the Angular app (`../folio-pro-ui`,
       `src/app/core/services/`) is checked and updated.
