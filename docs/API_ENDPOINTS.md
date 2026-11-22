@@ -89,7 +89,7 @@ Shared DTOs (`ApiDtos`):
   "isFavorite": false,             // starred in the UI; favorites are listed first
   "items": [ { "id": 10, "symbol": "NVDA", "name": "NVIDIA Corporation", "isFavorite": true } ] }
 
-// PageResponse<T>
+// PageResponse<T> (portfolios only; watchlist endpoints are not paginated)
 { "content": [ ... ], "page": 0, "size": 15, "totalElements": 42, "totalPages": 3 }
 ```
 
@@ -98,33 +98,30 @@ Shared DTOs (`ApiDtos`):
 | Query param | Type | Default | Rules |
 |---|---|---|---|
 | `market` | string | — (both markets) | `US`, `USA` (alias of `US`) or `India`, case-insensitive |
-| `page` | int | 0 | ≥ 0 |
-| `size` | int | 15 | 1–100 |
 
-Pagination applies to **watchlists**. Each watchlist in the page includes **all** of its items.
+Not paginated: the response is a JSON **array** (`WatchlistResponse[]`) of every matching watchlist, each
+with **all** of its items. `page`/`size` are no longer read (extra query parameters are ignored).
 Sorted with favorites first (`is_favorite` true before false), then by `id` ascending within each group.
 
 **Tables read:** `watchlists_usa`, `watchlists_india`, `watchlist_items_usa`, `watchlist_items_india`.
 
 **Query sequence** (`WatchlistService.listWatchlists`, one read-only transaction):
 
-1. **Page of watchlists:** UNION ALL over both watchlist tables, `order by is_favorite desc, id`, `offset/fetch first`.
+1. **All watchlists:** UNION ALL over both watchlist tables, `order by is_favorite desc, id`.
    If `market` is given, a `where market = ?` filter is applied to the union.
-2. **Count** for `totalElements`/`totalPages`: `select count(*)` over the same UNION ALL.
-   Spring Data skips this on the last partial page.
-3. **US items** (only if the page contains US watchlists):
+2. **US items** (only if there are US watchlists):
    ```sql
    select ... from watchlist_items_usa i join watchlists_usa w on w.id = i.watchlist_id
    where w.id in (?, ?, ...) order by i.id
    ```
-4. **India items** (only if the page contains India watchlists): same query against
+3. **India items** (only if there are India watchlists): same query against
    `watchlist_items_india` / `watchlists_india`.
 
-So a request runs **2–4 queries regardless of page size**. There is no N+1. Items are
+So a request runs **1–3 queries** however many watchlists and items there are. There is no N+1. Items are
 grouped in memory by `watchlist_id`. Watchlists with no items return `"items": []`.
 
 ```bash
-curl 'http://localhost:8081/api/v1/watchlists?market=US&page=0&size=15'
+curl 'http://localhost:8081/api/v1/watchlists?market=US'
 ```
 
 ### 2.2 `POST /api/v1/watchlists` — create an empty watchlist
@@ -153,21 +150,18 @@ curl -X POST localhost:8081/api/v1/watchlists -H 'Content-Type: application/json
   -d '{"name":"Growth picks","market":"US","userId":1}'
 ```
 
-### 2.3 `GET /api/v1/watchlists/{id}` — one watchlist with a page of items
+### 2.3 `GET /api/v1/watchlists/{id}` — one watchlist with all of its items
 
 | Param | Rules |
 |---|---|
 | `id` (path) | positive |
-| `page` | ≥ 0, default 0 (page of **items**) |
-| `size` | 1–100, default 15 |
 
 **Tables:** UNION ALL over `watchlists_usa` + `watchlists_india` `where id = ?` to find the watchlist and its
-market. Then a paged SELECT (plus a count) on `watchlist_items_usa` **or** `watchlist_items_india`.
+market. Then one SELECT of all its rows in `watchlist_items_usa` **or** `watchlist_items_india`.
 
 Errors: 404 `Watchlist not found`.
 
-The response is a plain `WatchlistResponse`. It does not include the total item count or
-total pages (see Known issues).
+The response is a plain `WatchlistResponse` with every item (not paginated).
 
 ### 2.4 `PATCH /api/v1/watchlists/{id}` — rename
 
@@ -424,9 +418,10 @@ Validation: 1–100 columns; `columnKey` matches `[A-Za-z0-9_]+` (≤ 50 chars) 
 1. **Unknown routes return 500, not 404.** A request to a path with no endpoint (for example
    `PATCH /api/v1/watchlists/1/favorite` on a build that predates it) reaches the generic 500 handler
    because `NoResourceFoundException` is not mapped. Query/path parameter violations such as
-   `?size=500` or `?market=XX` correctly return 400.
-2. **`GET /watchlists/{id}` paginates items but returns no item totals**, so clients can't tell
-   how many pages of items exist.
+   `?market=XX` correctly return 400.
+2. **Watchlist lists are unbounded.** `GET /watchlists` and `GET /watchlists/{id}` return every watchlist
+   and item in one response (by design, so the UI can show one scrolling page). Fine at personal scale;
+   revisit if a user ever has thousands of lists.
 3. **Responses always use `US`.** Every endpoint accepts `US`, `USA` or `India` (case-insensitive), but stored and returned values are `US` and `India`.
 4. **List endpoint ignores `userId`.** `user_id` is stored on US and India watchlists, but there is no filter by owner.
 7. **Export after older duplicates.** A user who still has two same-named watchlists from before

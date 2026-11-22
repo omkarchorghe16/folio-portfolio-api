@@ -30,7 +30,7 @@ class ApiIntegrationTest {
     .andExpect(status().isOk()).andExpect(jsonPath("$[0].isFavorite").value(true));
   org.junit.jupiter.api.Assertions.assertEquals(1,
     jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_usa WHERE watchlist_id=? AND is_favorite=TRUE",Integer.class,id));
-  mvc.perform(get("/api/v1/watchlists?market=US&page=0&size=15")).andExpect(status().isOk()).andExpect(jsonPath("$.page").value(0)).andExpect(jsonPath("$.size").value(15));
+  mvc.perform(get("/api/v1/watchlists?market=US")).andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
  }
  @Test void defaultsUsaWatchlistUserIdToOneWhenOmitted() throws Exception {
    String response=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
@@ -41,7 +41,7 @@ class ApiIntegrationTest {
    org.junit.jupiter.api.Assertions.assertEquals(1L,
      jdbc.queryForObject("SELECT user_id FROM watchlists_usa WHERE id=?",Long.class,id));
  }
- @Test void listsPaginatedWatchlistsWithAllTickerItems() throws Exception {
+ @Test void listsAllWatchlistsWithAllTickerItemsWithoutPagination() throws Exception {
   String response=mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
       .content("{\"name\":\"Paginated ticker list\",\"market\":\"US\"}"))
     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -50,11 +50,21 @@ class ApiIntegrationTest {
       .content("{\"items\":[{\"symbol\":\"AAPL\",\"name\":\"Apple Inc.\",\"isFavorite\":true},{\"symbol\":\"MSFT\",\"name\":\"Microsoft Corporation\"}]}"))
     .andExpect(status().isOk());
 
-  String page=mvc.perform(get("/api/v1/watchlists").param("market","US").param("page","0").param("size","100"))
-    .andExpect(status().isOk()).andExpect(jsonPath("$.page").value(0))
-    .andExpect(jsonPath("$.size").value(100)).andExpect(jsonPath("$.totalElements").isNumber())
-    .andExpect(jsonPath("$.totalPages").isNumber()).andReturn().getResponse().getContentAsString();
-  var content=mapper.readTree(page).get("content");
+  // More watchlists than the old 100-per-page cap, and more items than the old 15-per-page default.
+  for(int n=0;n<101;n++){
+   mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+     .content("{\"name\":\"Bulk "+n+"\",\"market\":\"US\"}")).andExpect(status().isOk());
+  }
+  StringBuilder items=new StringBuilder();
+  for(int n=0;n<20;n++){ items.append(n==0?"":",").append("{\"symbol\":\"T").append(n).append("\"}"); }
+  mvc.perform(post("/api/v1/watchlists/"+id+"/items").contentType(MediaType.APPLICATION_JSON)
+    .content("{\"items\":["+items+"]}")).andExpect(status().isOk());
+  long usaLists=jdbc.queryForObject("SELECT COUNT(*) FROM watchlists_usa",Long.class);
+  String all=mvc.perform(get("/api/v1/watchlists").param("market","US"))
+    .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value((int)usaLists))
+    .andReturn().getResponse().getContentAsString();
+  var content=mapper.readTree(all);
+  mvc.perform(get("/api/v1/watchlists/"+id)).andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(22));
   var matching=java.util.stream.StreamSupport.stream(content.spliterator(),false)
       .filter(entry->entry.get("id").asLong()==id).findFirst().orElseThrow();
   org.junit.jupiter.api.Assertions.assertEquals("Paginated ticker list",matching.get("name").asText());
@@ -148,8 +158,8 @@ class ApiIntegrationTest {
    // Star only the newer list: it must now be listed before the older, unstarred one.
    mvc.perform(patch("/api/v1/watchlists/"+second+"/favorite").contentType(MediaType.APPLICATION_JSON).content("{\"isFavorite\":true}"))
     .andExpect(status().isOk());
-   var content=mapper.readTree(mvc.perform(get("/api/v1/watchlists?market="+market+"&page=0&size=100"))
-     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("content");
+   var content=mapper.readTree(mvc.perform(get("/api/v1/watchlists?market="+market))
+     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
    boolean seenNonFavorite=false; long previousId=-1; boolean previousFavorite=true; int firstIndex=-1,secondIndex=-1;
    for(int i=0;i<content.size();i++){
     var w=content.get(i); boolean fav=w.get("isFavorite").asBoolean(); long id=w.get("id").asLong();
@@ -298,9 +308,9 @@ class ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.market").value("US"))
                 .andExpect(jsonPath("$.currency").value("USD"));
-        mvc.perform(get("/api/v1/watchlists").param("market", "USA").param("size", "100"))
+        mvc.perform(get("/api/v1/watchlists").param("market", "USA"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[*].market", org.hamcrest.Matchers.everyItem(
+                .andExpect(jsonPath("$[*].market", org.hamcrest.Matchers.everyItem(
                         org.hamcrest.Matchers.is("US"))));
         importCsv("us", 1, "Lowercase Alias\nAAPL\n").andExpect(status().isCreated());
         importCsv("Europe", 1, "Bad Market\nAAPL\n").andExpect(status().isBadRequest());

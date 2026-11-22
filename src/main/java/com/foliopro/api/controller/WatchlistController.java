@@ -35,13 +35,12 @@ public class WatchlistController {
     }
 
     @Operation(summary = "List watchlists with tickers",
-            description = "Returns a page of watchlists with every ticker and its name nested in each watchlist's items array. Pagination applies to watchlists; market accepts US, USA or India, and omitting it includes both.")
+            description = "Returns every watchlist (not paginated) with all of its tickers and names nested in its items "
+                    + "array, favorites first, then by id. market accepts US, USA or India; omitting it includes both.")
     @GetMapping
-    public PageResponse<WatchlistResponse> listWatchlists(
-            @RequestParam(required = false) @Pattern(regexp = WatchlistMarket.ACCEPTED_VALUES_PATTERN) String market,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "15") @Min(1) @Max(100) int size) {
-        return watchlistService.listWatchlists(market, page, size);
+    public List<WatchlistResponse> listWatchlists(
+            @RequestParam(required = false) @Pattern(regexp = WatchlistMarket.ACCEPTED_VALUES_PATTERN) String market) {
+        return watchlistService.listWatchlists(market);
     }
 
     @Operation(summary = "Create a watchlist",
@@ -53,13 +52,10 @@ public class WatchlistController {
         return watchlistService.createWatchlist(request);
     }
 
-    @Operation(summary = "Get a watchlist", description = "Returns a watchlist with a page of its items.")
+    @Operation(summary = "Get a watchlist", description = "Returns a watchlist with all of its items (not paginated).")
     @GetMapping("/{id}")
-    public WatchlistResponse getWatchlist(
-            @PathVariable @Positive long id,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "15") @Min(1) @Max(100) int size) {
-        return watchlistService.getWatchlist(id, page, size);
+    public WatchlistResponse getWatchlist(@PathVariable @Positive long id) {
+        return watchlistService.getWatchlist(id);
     }
 
     @Operation(summary = "Rename a watchlist",

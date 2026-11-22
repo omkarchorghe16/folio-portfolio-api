@@ -135,15 +135,11 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/watchlists?page={{watchlistPage}}&size={{watchlistPageSize}}",
+              "raw": "{{baseUrl}}/api/v1/watchlists",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "watchlists"],
-              "query": [
-                {"key": "page", "value": "{{watchlistPage}}"},
-                {"key": "size", "value": "{{watchlistPageSize}}"}
-              ]
+              "path": ["api", "v1", "watchlists"]
             },
-            "description": "Returns a page of watchlists with each watchlist's full items array (symbol, name, isFavorite). Omit market to include both US and India; optionally add market=US or market=India to filter. Pagination is zero-based and applies to watchlists."
+            "description": "Returns every watchlist (a JSON array, not paginated) with each watchlist's full items array (symbol, name, isFavorite). Omit market to include both US and India; optionally add market=US or market=India to filter."
           }
         },
         {
@@ -302,14 +298,11 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/watchlists/{{watchlistId}}?page=0&size=15",
+              "raw": "{{baseUrl}}/api/v1/watchlists/{{watchlistId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "watchlists", "{{watchlistId}}"],
-              "query": [
-                {"key": "page", "value": "0"},
-                {"key": "size", "value": "15"}
-              ]
-            }
+              "path": ["api", "v1", "watchlists", "{{watchlistId}}"]
+            },
+            "description": "Returns the watchlist with all of its items (not paginated)."
           }
         },
         {
@@ -450,8 +443,6 @@
   "variable": [
     {"key": "baseUrl", "value": "http://localhost:8081"},
     {"key": "watchlistId", "value": "1"},
-    {"key": "watchlistPage", "value": "0"},
-    {"key": "watchlistPageSize", "value": "15"},
     {"key": "portfolioId", "value": "1"},
     {"key": "symbol", "value": "AAPL"},
     {"key": "userId", "value": "1"}

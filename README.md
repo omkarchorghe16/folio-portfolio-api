@@ -8,7 +8,7 @@ The Folio Pro UI (`../personal-wealth-management-angular`, http://localhost:4200
 pages, `/watchlists/us` and `/watchlists/india`. Both call this service directly at
 `http://localhost:8081` (CORS origin `FRONTEND_ORIGIN`):
 
-- `GET /watchlists?market=US|USA|India&size=100` (all pages) to fill the watchlist dropdown; favorites come first.
+- `GET /watchlists?market=US|USA|India` (every watchlist with all its tickers, not paginated) to fill the watchlist dropdown; favorites come first.
 - `PATCH /watchlists/{id}/favorite` when the user clicks the star in the dropdown.
 - `POST /watchlists/import?market=USA|India&userId=1` for "Import CSV".
 - `GET /watchlists/export?market=US|India&userId=1&watchlistId=…` for "Export CSV".
@@ -32,10 +32,10 @@ See [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) for a per-endpoint reference,
 |---|---|---|
 | GET, POST | `/portfolios` | Paginated list / create (page=0,size=15) |
 | GET, PUT, DELETE | `/portfolios/{id}` | Read, replace portfolio and holdings, delete |
-| GET | `/watchlists?page=0&size=15&market=US\|India` | Paginated watchlists with every ticker nested in each watchlist's `items` array; omit market for both |
+| GET | `/watchlists?market=US\|India` | Every watchlist (not paginated) with every ticker nested in its `items` array; omit market for both |
 | POST | `/watchlists` | Create `{name,market,userId?}`; `userId` defaults to `1`. If that user already has a watchlist with the same name in the same market (case-insensitive), the existing one is returned instead of creating a duplicate |
 | POST | `/watchlists/import?market=USA&userId=1` | Import a column-oriented CSV (`multipart/form-data`, field `file`); each header is a watchlist name and cells beneath it are symbols. `market=USA` (or `US`) writes to `watchlists_usa`, `market=India` to `watchlists_india`; both store `userId` (default `1`). Market defaults to `USA`. Imports only add: a column whose name matches one of that user's watchlists in the same market (case-insensitive) appends its new symbols there and skips ones already present; other columns create new watchlists. Nothing is deleted. |
-| GET, PATCH, DELETE | `/watchlists/{id}` | Read with paginated items / rename (400 if the owner already has another watchlist with that name in the market) / delete |
+| GET, PATCH, DELETE | `/watchlists/{id}` | Read with all items / rename (400 if the owner already has another watchlist with that name in the market) / delete |
 | PATCH | `/watchlists/{id}/favorite?userId=1` | Star or un-star a USA or India watchlist: body `{"isFavorite": true}` |
 | POST | `/watchlists/{id}/items` | Atomic bulk-add `{items:[...]}` |
 | GET | `/watchlists/export?market=US\|USA\|India&userId=1[&watchlistId=]` | CSV download in the import format: row 1 holds the watchlist names, one per column, and rows 2+ hold each watchlist's ticker symbols in its column. One list with `watchlistId`, else all of the user's lists in the market. Cells starting with `=`, `+`, `-` or `@` get a leading `'` so spreadsheets show them as plain text (never a formula or hyperlink); the import removes it. 404 if the list is not the user's in that market |
@@ -48,28 +48,22 @@ See [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) for a per-endpoint reference,
 
 Watchlist items contain `symbol`, `name`, and `isFavorite` (false by default). These items are only for symbol tracking/favorites; market quote and technical data are not stored in these tables. USA items are stored in `watchlist_items_usa` and reference `watchlists_usa`; India items are stored in `watchlist_items_india` and reference `watchlists_india`. Portfolio holdings include `symbol`, `instrument`, `quantity`, `averageCost`, `marketValue`, and `currency`.
 
-The watchlist-list response paginates watchlists (zero-based `page`, `size` 1–100) while returning all ticker items for every watchlist on that page:
+The watchlist-list response is a JSON array of every matching watchlist, each with all of its ticker items (there is no pagination; `page`/`size` are no longer read):
 
 ```json
-{
-  "content": [
-    {
-      "id": 1,
-      "name": "Long-term ideas",
-      "market": "US",
-      "currency": "USD",
-      "userId": 1,
-      "isFavorite": true,
-      "items": [
-        {"id": 10, "symbol": "AAPL", "name": "Apple Inc.", "isFavorite": true}
-      ]
-    }
-  ],
-  "page": 0,
-  "size": 15,
-  "totalElements": 1,
-  "totalPages": 1
-}
+[
+  {
+    "id": 1,
+    "name": "Long-term ideas",
+    "market": "US",
+    "currency": "USD",
+    "userId": 1,
+    "isFavorite": true,
+    "items": [
+      {"id": 10, "symbol": "AAPL", "name": "Apple Inc.", "isFavorite": true}
+    ]
+  }
+]
 ```
 
 Errors have `{timestamp,status,error,message,details}`. Validation errors map field names to messages. Watchlists are sorted with favorites first, then by ID; other lists are sorted by ID. Duplicate item symbol (case-insensitive) returns HTTP 400; missing resource returns 404. CSV imports validate the complete file before saving and save all watchlists/items atomically; duplicate names or symbols within the file, malformed CSV, and invalid symbols fail the import. Re-importing never removes existing stocks: same-named watchlists of the same user and market receive the new symbols, and the response reports `watchlistsCreated`, `watchlistsUpdated`, `itemsCreated` and `itemsSkipped`.
@@ -91,7 +85,7 @@ In the collection, the CSV import request uses `multipart/form-data`; choose the
 ### Examples
 
 ```bash
-curl 'http://localhost:8081/api/v1/watchlists?market=US&page=0&size=15'
+curl 'http://localhost:8081/api/v1/watchlists?market=US'
 curl -X POST http://localhost:8081/api/v1/watchlists -H 'Content-Type: application/json' \
   -d '{"name":"Long-term ideas","market":"US","userId":1}'
 curl -X POST 'http://localhost:8081/api/v1/watchlists/import?market=USA&userId=1' \
@@ -177,4 +171,4 @@ news-scheduler jobs, notification channels, or provider credentials into this ap
 
 ## Tests and limitations
 
-`mvn test` runs Spring integration tests against H2 (`src/test/resources/test-schema.sql`, which must be kept in step with the Flyway migrations). They cover CRUD, bulk duplicate handling, pagination, request validation, CSV import into both markets (including adding to existing same-named watchlists), CSV export and its round trip back through the import, one watchlist name per user and market, favorites and their ordering, and column preferences. There is intentionally no authentication or multi-user authorization, and this API serves no market data or financial advice. Known gaps are listed in [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md#5-known-issues--improvement-notes).
+`mvn test` runs Spring integration tests against H2 (`src/test/resources/test-schema.sql`, which must be kept in step with the Flyway migrations). They cover CRUD, bulk duplicate handling, listing every watchlist and item without pagination, request validation, CSV import into both markets (including adding to existing same-named watchlists), CSV export and its round trip back through the import, one watchlist name per user and market, favorites and their ordering, and column preferences. There is intentionally no authentication or multi-user authorization, and this API serves no market data or financial advice. Known gaps are listed in [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md#5-known-issues--improvement-notes).

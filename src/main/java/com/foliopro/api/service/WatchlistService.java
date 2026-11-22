@@ -5,9 +5,6 @@ import com.foliopro.api.model.*;
 import com.foliopro.api.repository.IndiaWatchlistItemRepository;
 import com.foliopro.api.repository.UsaWatchlistItemRepository;
 import com.foliopro.api.repository.WatchlistRepository;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,17 +39,15 @@ public class WatchlistService {
 
     // ---- Watchlists ----
 
-    /** Returns a page of watchlists with all of their items, loading items in one query per market. */
+    /** Returns every watchlist with all of its items, loading items in one query per market. */
     @Transactional(readOnly = true)
-    public PageResponse<WatchlistResponse> listWatchlists(String market, int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size, WATCHLIST_ORDER);
-        Page<WatchlistEntity> result = market == null
-                ? watchlistRepository.findAll(pageRequest)
-                : watchlistRepository.findByMarket(WatchlistMarket.normalize(market), pageRequest);
-        List<WatchlistEntity> pageWatchlists = result.getContent();
+    public List<WatchlistResponse> listWatchlists(String market) {
+        List<WatchlistEntity> watchlists = market == null
+                ? watchlistRepository.findAll(WATCHLIST_ORDER)
+                : watchlistRepository.findByMarket(WatchlistMarket.normalize(market), WATCHLIST_ORDER);
 
-        List<Long> usaIds = idsOf(pageWatchlists, UsaWatchlistEntity.class);
-        List<Long> indiaIds = idsOf(pageWatchlists, IndiaWatchlistEntity.class);
+        List<Long> usaIds = idsOf(watchlists, UsaWatchlistEntity.class);
+        List<Long> indiaIds = idsOf(watchlists, IndiaWatchlistEntity.class);
         Map<Long, List<WatchlistItemResponse>> itemsByWatchlistId = new HashMap<>();
         if (!usaIds.isEmpty()) {
             for (UsaWatchlistItemEntity item : usaItemRepository.findByWatchlistIdInOrderByIdAsc(usaIds)) {
@@ -64,29 +59,17 @@ public class WatchlistService {
                 itemsByWatchlistId.computeIfAbsent(item.getWatchlist().getId(), key -> new ArrayList<>()).add(toItemResponse(item));
             }
         }
-
-        List<WatchlistResponse> content = pageWatchlists.stream()
+        return watchlists.stream()
                 .map(w -> toResponse(w, itemsByWatchlistId.getOrDefault(w.getId(), List.of())))
                 .toList();
-        return new PageResponse<>(content, page, size, result.getTotalElements(), result.getTotalPages());
     }
 
-    /** Returns one watchlist with a page of its items. */
+    /** Returns one watchlist with all of its items, in the order they were added. */
     @Transactional(readOnly = true)
-    public WatchlistResponse getWatchlist(long id, int page, int size) {
-        WatchlistEntity watchlist = findWatchlist(id);
-        Pageable pageable = PageRequest.of(page, size, Sort.by("id").ascending());
-        Page<? extends WatchlistItemEntity> items = watchlist instanceof UsaWatchlistEntity
-                ? usaItemRepository.findByWatchlistId(id, pageable)
-                : indiaItemRepository.findByWatchlistId(id, pageable);
-        return toResponse(watchlist, items.getContent().stream().map(this::toItemResponse).toList());
+    public WatchlistResponse getWatchlist(long id) {
+        return toResponse(findWatchlist(id));
     }
 
-    /**
-     * Returns the user's existing watchlist when one with the same name (case-insensitive) already
-     * exists in that market, so a user never gets two watchlists with the same name. Otherwise creates
-     * an empty watchlist.
-     */
     @Transactional
     public WatchlistResponse createWatchlist(WatchlistRequest request) {
         String market = WatchlistMarket.normalize(request.market());
