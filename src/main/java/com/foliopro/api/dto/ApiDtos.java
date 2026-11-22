@@ -1,5 +1,6 @@
 package com.foliopro.api.dto;
 
+import com.foliopro.api.model.WatchlistMarket;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
@@ -15,7 +16,7 @@ public final class ApiDtos {
       @Valid List<HoldingRequest> holdings) {}
     public record HoldingResponse(String symbol, String instrument, BigDecimal quantity, BigDecimal averageCost, BigDecimal marketValue, String currency) {}
     public record PortfolioResponse(Long id, String name, String country, String currency, String assetType, List<HoldingResponse> holdings, boolean sampleData) {}
-    public record WatchlistRequest(@NotBlank @Size(max=40) String name, @NotBlank @Pattern(regexp="US|India") String market,
+    public record WatchlistRequest(@NotBlank @Size(max=40) String name, @NotBlank @Pattern(regexp=WatchlistMarket.ACCEPTED_VALUES_PATTERN) String market,
       @Positive Long userId) {}
     /** Symbols may contain . - & (NSE: M&M, BAJAJ-AUTO) and $ (US preferred shares: ABR$D). */
     public record WatchlistItemRequest(@NotBlank @Pattern(regexp=WatchlistItemRequest.SYMBOL_PATTERN) String symbol,
@@ -27,6 +28,8 @@ public final class ApiDtos {
     public record WatchlistResponse(Long id, String name, String market, String currency, Long userId,
       boolean isFavorite, List<WatchlistItemResponse> items) {}
     public record WatchlistFavoriteRequest(@NotNull Boolean isFavorite) {}
-    public record WatchlistImportResponse(int watchlistsCreated, int itemsCreated, List<String> watchlistNames) {}
+    /** itemsCreated counts newly added stocks; itemsSkipped counts symbols that were already in the watchlist. */
+    public record WatchlistImportResponse(int watchlistsCreated, int watchlistsUpdated, int itemsCreated,
+      int itemsSkipped, List<String> watchlistNames) {}
     public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages) {}
 }

@@ -8,7 +8,7 @@ The Folio Pro UI (`../personal-wealth-management-angular`, http://localhost:4200
 pages, `/watchlists/us` and `/watchlists/india`. Both call this service directly at
 `http://localhost:8081` (CORS origin `FRONTEND_ORIGIN`):
 
-- `GET /watchlists?market=US|India&size=100` (all pages) to fill the watchlist dropdown; favorites come first.
+- `GET /watchlists?market=US|USA|India&size=100` (all pages) to fill the watchlist dropdown; favorites come first.
 - `PATCH /watchlists/{id}/favorite` when the user clicks the star in the dropdown.
 - `POST /watchlists/import?market=USA|India&userId=1` for "Import CSV".
 - `GET`/`PUT /users/1/watchlist-column-preferences` for "Edit columns".
@@ -31,9 +31,9 @@ See [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) for a per-endpoint reference,
 | GET, POST | `/portfolios` | Paginated list / create (page=0,size=15) |
 | GET, PUT, DELETE | `/portfolios/{id}` | Read, replace portfolio and holdings, delete |
 | GET | `/watchlists?page=0&size=15&market=US\|India` | Paginated watchlists with every ticker nested in each watchlist's `items` array; omit market for both |
-| POST | `/watchlists` | Create `{name,market,userId?}`; `userId` defaults to `1` |
-| POST | `/watchlists/import?market=USA&userId=1` | Import a column-oriented CSV (`multipart/form-data`, field `file`); each header is a watchlist name and cells beneath it are symbols. `market=USA` writes to `watchlists_usa`, `market=India` to `watchlists_india`; both store `userId` (default `1`). Market defaults to `USA`. |
-| GET, PATCH, DELETE | `/watchlists/{id}` | Read with paginated items / rename / delete |
+| POST | `/watchlists` | Create `{name,market,userId?}`; `userId` defaults to `1`. If that user already has a watchlist with the same name in the same market (case-insensitive), the existing one is returned instead of creating a duplicate |
+| POST | `/watchlists/import?market=USA&userId=1` | Import a column-oriented CSV (`multipart/form-data`, field `file`); each header is a watchlist name and cells beneath it are symbols. `market=USA` (or `US`) writes to `watchlists_usa`, `market=India` to `watchlists_india`; both store `userId` (default `1`). Market defaults to `USA`. Imports only add: a column whose name matches one of that user's watchlists in the same market (case-insensitive) appends its new symbols there and skips ones already present; other columns create new watchlists. Nothing is deleted. |
+| GET, PATCH, DELETE | `/watchlists/{id}` | Read with paginated items / rename (400 if the owner already has another watchlist with that name in the market) / delete |
 | PATCH | `/watchlists/{id}/favorite?userId=1` | Star or un-star a USA or India watchlist: body `{"isFavorite": true}` |
 | POST | `/watchlists/{id}/items` | Atomic bulk-add `{items:[...]}` |
 | POST | `/watchlists/india/{id}/items?userId=1` | Atomic bulk-add of NSE stocks into `watchlist_items_india`; 201 with the saved items. 404 if the list is a USA list or belongs to another user; 400 on a duplicate symbol. Symbols may contain `. - & $` (e.g. `M&M`, `BRK.B`, `ABR$D`) |
@@ -69,9 +69,9 @@ The watchlist-list response paginates watchlists (zero-based `page`, `size` 1–
 }
 ```
 
-Errors have `{timestamp,status,error,message,details}`. Validation errors map field names to messages. Watchlists are sorted with favorites first, then by ID; other lists are sorted by ID. Duplicate item symbol (case-insensitive) returns HTTP 400; missing resource returns 404. CSV imports validate the complete file before saving and create all watchlists/items atomically; duplicate names or symbols, malformed CSV, and invalid symbols fail the import.
+Errors have `{timestamp,status,error,message,details}`. Validation errors map field names to messages. Watchlists are sorted with favorites first, then by ID; other lists are sorted by ID. Duplicate item symbol (case-insensitive) returns HTTP 400; missing resource returns 404. CSV imports validate the complete file before saving and save all watchlists/items atomically; duplicate names or symbols within the file, malformed CSV, and invalid symbols fail the import. Re-importing never removes existing stocks: same-named watchlists of the same user and market receive the new symbols, and the response reports `watchlistsCreated`, `watchlistsUpdated`, `itemsCreated` and `itemsSkipped`.
 
-Watchlists and items are stored in separate USA and India tables: `watchlists_usa`/`watchlist_items_usa` and `watchlists_india`/`watchlist_items_india`. Each items table has a foreign key to its corresponding watchlist table. Flyway migrations move existing rows into the market-specific tables, preserve IDs and item links, remove quote/technical columns, and initialize `is_favorite` to false. The import endpoint accepts `USA` (also `US` for compatibility) or `India`.
+Watchlists and items are stored in separate USA and India tables: `watchlists_usa`/`watchlist_items_usa` and `watchlists_india`/`watchlist_items_india`. Each items table has a foreign key to its corresponding watchlist table. Flyway migrations move existing rows into the market-specific tables, preserve IDs and item links, remove quote/technical columns, and initialize `is_favorite` to false. All watchlist endpoints accept `US`, `USA` or `India` (case-insensitive) for `market`; values are stored and returned as `US` or `India`.
 
 USA and India watchlists both have `user_id` (default `1`) and `is_favorite` (default `false`) columns. The create-watchlist request can include `userId`, and CSV import accepts it as a query parameter. The favorite endpoint returns 404 for a watchlist owned by another user. The user ID is a development placeholder and is not authenticated.
 

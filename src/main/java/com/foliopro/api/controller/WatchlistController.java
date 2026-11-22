@@ -1,6 +1,7 @@
 package com.foliopro.api.controller;
 
 import com.foliopro.api.dto.ApiDtos.*;
+import com.foliopro.api.model.WatchlistMarket;
 import com.foliopro.api.service.WatchlistService;
 import com.foliopro.api.service.WatchlistImportService;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -34,17 +35,19 @@ public class WatchlistController {
     }
 
     @Operation(summary = "List watchlists with tickers",
-            description = "Returns a page of watchlists with every ticker and its name nested in each watchlist's items array. Pagination applies to watchlists; omit market to include both US and India.")
+            description = "Returns a page of watchlists with every ticker and its name nested in each watchlist's items array. Pagination applies to watchlists; market accepts US, USA or India, and omitting it includes both.")
     @GetMapping
     public PageResponse<WatchlistResponse> listWatchlists(
-            @RequestParam(required = false) @Pattern(regexp = "US|India") String market,
+            @RequestParam(required = false) @Pattern(regexp = WatchlistMarket.ACCEPTED_VALUES_PATTERN) String market,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "15") @Min(1) @Max(100) int size) {
         return watchlistService.listWatchlists(market, page, size);
     }
 
     @Operation(summary = "Create a watchlist",
-            description = "Creates an empty watchlist for the selected market. userId defaults to 1 if omitted.")
+            description = "Creates an empty watchlist for the selected market (US, USA or India). userId defaults to 1 if omitted. "
+                    + "If the user already has a watchlist with the same name in that market (case-insensitive), "
+                    + "that existing watchlist is returned and no new one is created.")
     @PostMapping
     public WatchlistResponse createWatchlist(@Valid @RequestBody WatchlistRequest request) {
         return watchlistService.createWatchlist(request);
@@ -59,7 +62,9 @@ public class WatchlistController {
         return watchlistService.getWatchlist(id, page, size);
     }
 
-    @Operation(summary = "Rename a watchlist", description = "Updates the watchlist name. Its market cannot be changed.")
+    @Operation(summary = "Rename a watchlist",
+            description = "Updates the watchlist name. Its market cannot be changed, and the name must not be used by "
+                    + "another of the owner's watchlists in that market (400).")
     @PatchMapping("/{id}")
     public WatchlistResponse renameWatchlist(
             @PathVariable @Positive long id, @Valid @RequestBody WatchlistRequest request) {
@@ -166,8 +171,13 @@ public class WatchlistController {
             description = """
                     Upload a column-oriented CSV file. The first row contains watchlist names; each subsequent
                     column contains the stock symbols for that watchlist. Empty cells are ignored. Names and
-                    symbols must be unique within the import. The complete file is validated before any records
+                    symbols must be unique within the file. The complete file is validated before any records
                     are saved. Maximum file size is 5 MB.
+
+                    Imports only add data. If the user already has a watchlist with the same name in the same
+                    market (case-insensitive), its new symbols are added to that watchlist and symbols it
+                    already contains are skipped. Other names create new watchlists. Existing watchlists and
+                    stocks are never deleted.
                     """,
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
@@ -183,7 +193,7 @@ public class WatchlistController {
             @Parameter(description = "Column-oriented watchlist CSV file", required = true,
                     content = @Content(mediaType = "text/csv", schema = @Schema(type = "string", format = "binary")))
             @RequestPart("file") MultipartFile file,
-             @Parameter(description = "Target watchlist table: USA or India", example = "USA",
+             @Parameter(description = "Target market: US, USA or India (case-insensitive)", example = "USA",
                      schema = @Schema(allowableValues = {"USA", "India", "US"}, defaultValue = "USA"))
             @RequestParam(defaultValue = "USA") String market,
             @Parameter(description = "Watchlist owner ID (USA and India). Defaults to 1.", example = "1")

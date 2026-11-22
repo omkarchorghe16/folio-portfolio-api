@@ -242,4 +242,117 @@ class ApiIntegrationTest {
   org.junit.jupiter.api.Assertions.assertEquals(0,
    jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_usa WHERE watchlist_id=?",Integer.class,id));
  }
+
+    @Test
+    void reimportAddsNewSymbolsToSameNamedWatchlistOfSameUser() throws Exception {
+        importCsv("USA", 7, "Merge Tech,Merge Banks\nAAPL,JPM\nMSFT,\n")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.watchlistsCreated").value(2))
+                .andExpect(jsonPath("$.watchlistsUpdated").value(0))
+                .andExpect(jsonPath("$.itemsCreated").value(3))
+                .andExpect(jsonPath("$.itemsSkipped").value(0));
+        long techId = jdbc.queryForObject(
+                "SELECT id FROM watchlists_usa WHERE user_id=7 AND name='Merge Tech'", Long.class);
+
+        // Same name in different case, one symbol already present, one new symbol, one new watchlist.
+        importCsv("US", 7, "merge tech,Merge Energy\nmsft,XOM\nGOOG,\n")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.watchlistsCreated").value(1))
+                .andExpect(jsonPath("$.watchlistsUpdated").value(1))
+                .andExpect(jsonPath("$.itemsCreated").value(2))
+                .andExpect(jsonPath("$.itemsSkipped").value(1))
+                .andExpect(jsonPath("$.watchlistNames[0]").value("Merge Tech"))
+                .andExpect(jsonPath("$.watchlistNames[1]").value("Merge Energy"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM watchlists_usa WHERE user_id=7 AND LOWER(name)='merge tech'",
+                        Integer.class));
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of("AAPL", "MSFT", "GOOG"),
+                jdbc.queryForList("SELECT symbol FROM watchlist_items_usa WHERE watchlist_id=? ORDER BY id",
+                        String.class, techId));
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_usa i JOIN watchlists_usa w "
+                        + "ON i.watchlist_id=w.id WHERE w.user_id=7 AND w.name='Merge Banks'", Integer.class));
+    }
+
+    @Test
+    void reimportCreatesSeparateWatchlistForDifferentUserOrMarket() throws Exception {
+        importCsv("USA", 8, "Shared Name\nAAPL\n").andExpect(status().isCreated());
+        importCsv("USA", 9, "Shared Name\nAAPL\n")
+                .andExpect(jsonPath("$.watchlistsCreated").value(1))
+                .andExpect(jsonPath("$.watchlistsUpdated").value(0));
+        importCsv("India", 8, "Shared Name\nTCS.NS\n")
+                .andExpect(jsonPath("$.watchlistsCreated").value(1))
+                .andExpect(jsonPath("$.watchlistsUpdated").value(0));
+
+        org.junit.jupiter.api.Assertions.assertEquals(2,
+                jdbc.queryForObject("SELECT COUNT(*) FROM watchlists_usa WHERE name='Shared Name'", Integer.class));
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM watchlists_india WHERE name='Shared Name'", Integer.class));
+    }
+
+    @Test
+    void acceptsUsaAsAliasOfUsForCreateAndList() throws Exception {
+        mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Alias list\",\"market\":\"USA\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.market").value("US"))
+                .andExpect(jsonPath("$.currency").value("USD"));
+        mvc.perform(get("/api/v1/watchlists").param("market", "USA").param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].market", org.hamcrest.Matchers.everyItem(
+                        org.hamcrest.Matchers.is("US"))));
+        importCsv("us", 1, "Lowercase Alias\nAAPL\n").andExpect(status().isCreated());
+        importCsv("Europe", 1, "Bad Market\nAAPL\n").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createReturnsExistingWatchlistForSameUserNameAndMarket() throws Exception {
+        long firstId = createWatchlistId("Long Term", "US", 11);
+        org.junit.jupiter.api.Assertions.assertEquals(firstId, createWatchlistId("  long term ", "USA", 11));
+        org.junit.jupiter.api.Assertions.assertNotEquals(firstId, createWatchlistId("Long Term", "US", 12));
+        org.junit.jupiter.api.Assertions.assertNotEquals(firstId, createWatchlistId("Long Term", "India", 11));
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM watchlists_usa WHERE user_id=11 AND LOWER(name)='long term'",
+                        Integer.class));
+
+        // A later import for the same user fills the same watchlist instead of creating another one.
+        importCsv("USA", 11, "Long Term\nAAPL\n")
+                .andExpect(jsonPath("$.watchlistsCreated").value(0))
+                .andExpect(jsonPath("$.watchlistsUpdated").value(1));
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM watchlist_items_usa WHERE watchlist_id=?", Integer.class,
+                        firstId));
+    }
+
+    @Test
+    void renameRejectsNameAlreadyUsedBySameUser() throws Exception {
+        long keepId = createWatchlistId("Rename Keep", "US", 13);
+        long otherId = createWatchlistId("Rename Other", "US", 13);
+        mvc.perform(patch("/api/v1/watchlists/" + otherId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"rename keep\",\"market\":\"US\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("already exists")));
+        // Changing only the letter case of its own name is allowed.
+        mvc.perform(patch("/api/v1/watchlists/" + keepId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"RENAME KEEP\",\"market\":\"US\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("RENAME KEEP"));
+    }
+
+    private long createWatchlistId(String name, String market, long userId) throws Exception {
+        String body = "{\"name\":\"" + name + "\",\"market\":\"" + market + "\",\"userId\":" + userId + "}";
+        String response = mvc.perform(post("/api/v1/watchlists").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return mapper.readTree(response).get("id").asLong();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions importCsv(String market, long userId, String csv)
+            throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "watchlists.csv", "text/csv",
+                csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return mvc.perform(multipart("/api/v1/watchlists/import")
+                .file(file).param("market", market).param("userId", String.valueOf(userId)));
+    }
 }

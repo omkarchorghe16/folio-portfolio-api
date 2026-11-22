@@ -97,7 +97,7 @@ Shared DTOs (`ApiDtos`):
 
 | Query param | Type | Default | Rules |
 |---|---|---|---|
-| `market` | string | — (both markets) | `US` or `India` |
+| `market` | string | — (both markets) | `US`, `USA` (alias of `US`) or `India`, case-insensitive |
 | `page` | int | 0 | ≥ 0 |
 | `size` | int | 15 | 1–100 |
 
@@ -134,13 +134,19 @@ Body (`WatchlistRequest`):
 | Field | Rules |
 |---|---|
 | `name` | required, ≤ 40 chars, trimmed |
-| `market` | required, `US` or `India` |
+| `market` | required, `US`, `USA` (stored as `US`) or `India`, case-insensitive |
 | `userId` | optional, positive. Stored for US and India (defaults to 1) |
 
-**Tables:** `select next value for watchlists_id_seq`, then INSERT into `watchlists_usa` **or**
-`watchlists_india`, then a SELECT on the matching items table to build the (empty) `items` array.
+**One watchlist per name per user and market.** If the user (`userId`, default 1) already has a
+watchlist with this name in this market (case-insensitive, trimmed), nothing is created and that
+existing watchlist is returned with its items. A different user, or the other market, gets its own
+watchlist. If several same-named watchlists already exist from before this rule, the oldest is returned.
 
-Response: `200 OK` with `WatchlistResponse`.
+**Tables:** a SELECT on `watchlists_usa` **or** `watchlists_india` by `user_id` and `lower(name)`; if none
+matches, `select next value for watchlists_id_seq` and an INSERT. Then a SELECT on the matching items
+table to build the `items` array.
+
+Response: `200 OK` with `WatchlistResponse` (the new watchlist, or the existing one).
 
 ```bash
 curl -X POST localhost:8081/api/v1/watchlists -H 'Content-Type: application/json' \
@@ -167,12 +173,15 @@ total pages (see Known issues).
 
 Body: the full `WatchlistRequest` (`name` and `market` are required). `market` must equal the
 existing market, otherwise 400 `Market cannot be changed when renaming a watchlist`. `userId` is
-ignored.
+ignored. The new name must not be used by another of the owner's watchlists in that market
+(case-insensitive), otherwise 400 `A watchlist named "…" already exists`. Changing only the case of
+the watchlist's own name is allowed.
 
-**Tables:** UNION ALL lookup by id → UPDATE `watchlists_usa`/`watchlists_india` `set name` →
+**Tables:** UNION ALL lookup by id → SELECT for a same-named watchlist of the owner → UPDATE
+`watchlists_usa`/`watchlists_india` `set name` →
 SELECT all items from the matching items table for the response.
 
-Errors: 404 not found, 400 market mismatch / validation.
+Errors: 404 not found, 400 market mismatch / name already used / validation.
 
 ### 2.4a `PATCH /api/v1/watchlists/{id}/favorite?userId=1` — star / un-star a watchlist
 
@@ -252,14 +261,29 @@ Validation runs on the whole file before anything is saved:
 * rows can't have more columns than the header row
 * quoting follows RFC 4180, and a UTF-8 BOM is accepted
 
-Names aren't checked against watchlists that already exist, so an import can create a second
-list with the same name.
+**Imports only add, never delete or overwrite.** Each column is matched against the user's existing
+watchlists in the same market by name (case-insensitive, surrounding spaces ignored):
 
-**Tables (`WatchlistImportService`, one transaction):** `watchlists_id_seq` (one `next value` per
-watchlist) → INSERT into `watchlists_usa` or `watchlists_india` (`saveAll`) → one INSERT per symbol into
+| Column name | Result |
+|---|---|
+| Matches an existing watchlist of the same `userId` and market | New symbols are appended to that watchlist; symbols it already has are skipped (counted in `itemsSkipped`) |
+| No match | A new watchlist is created with the column's symbols |
+
+Existing watchlists and stocks are never removed or renamed. A watchlist with the same name owned by
+another user, or in the other market, is not touched; a new one is created instead. If the user
+already has several same-named watchlists (from imports made before this rule), the oldest one is used.
+
+**Tables (`WatchlistImportService`, one transaction):** one SELECT of the user's watchlists in that
+market (`watchlists_usa` or `watchlists_india`) → for each matched watchlist, one SELECT of its items →
+INSERT of each new watchlist (`watchlists_id_seq`) → one INSERT per new symbol into
 `watchlist_items_usa` or `watchlist_items_india`.
 
-Response: `{ "watchlistsCreated": 2, "itemsCreated": 5, "watchlistNames": ["Tech","Banks"] }`
+Response (`watchlistNames` lists every watchlist the file touched, using its stored name):
+
+```json
+{ "watchlistsCreated": 1, "watchlistsUpdated": 1, "itemsCreated": 3, "itemsSkipped": 2,
+  "watchlistNames": ["Tech", "Banks"] }
+```
 
 Errors: 400 empty file / parse or validation error / bad market or userId, 413 file > 5 MB.
 
@@ -320,7 +344,7 @@ Validation: 1–100 columns; `columnKey` matches `[A-Za-z0-9_]+` (≤ 50 chars) 
    `?size=500` or `?market=XX` correctly return 400.
 2. **`GET /watchlists/{id}` paginates items but returns no item totals**, so clients can't tell
    how many pages of items exist.
-3. **Market vocabulary is inconsistent.** Import accepts `USA`/`US`/`India`, while list/create accept only `US`/`India`.
+3. **Responses always use `US`.** Every endpoint accepts `US`, `USA` or `India` (case-insensitive), but stored and returned values are `US` and `India`.
 4. **List endpoint ignores `userId`.** `user_id` is stored on US and India watchlists, but there is no filter by owner.
 7. **Item symbol rules differ from import.** CSV import accepts `&` (e.g. `M&M`), but `POST /watchlists/{id}/items` and `PUT /watchlists/{id}/items/{symbol}` validate with `[A-Za-z0-9.-]{1,15}`, so `M&M` is rejected there.
 5. **N+1 patterns:** `GET /portfolios` (holdings per portfolio), bulk add items (one duplicate-check

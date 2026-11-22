@@ -22,6 +22,8 @@ import java.util.*;
 public class WatchlistService {
     private static final String WATCHLIST_NOT_FOUND = "Watchlist not found";
     private static final String ITEM_NOT_FOUND = "Watchlist item not found";
+    /** Owner used when a request omits userId; there is no login yet. */
+    private static final long DEFAULT_USER_ID = 1L;
 
     /** Favorites (is_favorite = true) first, then the rest; each group in creation (id) order. Same for USA and India. */
     private static final Sort WATCHLIST_ORDER = Sort.by(Sort.Order.desc("favorite"), Sort.Order.asc("id"));
@@ -46,7 +48,7 @@ public class WatchlistService {
         PageRequest pageRequest = PageRequest.of(page, size, WATCHLIST_ORDER);
         Page<WatchlistEntity> result = market == null
                 ? watchlistRepository.findAll(pageRequest)
-                : watchlistRepository.findByMarket(market, pageRequest);
+                : watchlistRepository.findByMarket(WatchlistMarket.normalize(market), pageRequest);
         List<WatchlistEntity> pageWatchlists = result.getContent();
 
         List<Long> usaIds = idsOf(pageWatchlists, UsaWatchlistEntity.class);
@@ -80,23 +82,44 @@ public class WatchlistService {
         return toResponse(watchlist, items.getContent().stream().map(this::toItemResponse).toList());
     }
 
+    /**
+     * Returns the user's existing watchlist when one with the same name (case-insensitive) already
+     * exists in that market, so a user never gets two watchlists with the same name. Otherwise creates
+     * an empty watchlist.
+     */
     @Transactional
     public WatchlistResponse createWatchlist(WatchlistRequest request) {
-        WatchlistEntity watchlist = request.market().equals("US") ? new UsaWatchlistEntity() : new IndiaWatchlistEntity();
-        watchlist.setName(request.name().trim());
-        if (request.userId() != null) {
-            watchlist.setUserId(request.userId());
+        String market = WatchlistMarket.normalize(request.market());
+        String name = request.name().trim();
+        long userId = request.userId() != null ? request.userId() : DEFAULT_USER_ID;
+        Optional<WatchlistEntity> existing = findSameNamedWatchlist(userId, market, name);
+        if (existing.isPresent()) {
+            return toResponse(existing.get());
         }
+
+        WatchlistEntity watchlist = WatchlistMarket.US.equals(market)
+                ? new UsaWatchlistEntity()
+                : new IndiaWatchlistEntity();
+        watchlist.setName(name);
+        watchlist.setUserId(userId);
         return toResponse(watchlistRepository.save(watchlist));
     }
 
+    /** Rejects a new name that another watchlist of the same user and market already uses. */
     @Transactional
     public WatchlistResponse renameWatchlist(long id, WatchlistRequest request) {
         WatchlistEntity watchlist = findWatchlist(id);
-        if (!watchlist.getMarket().equals(request.market())) {
+        if (!watchlist.getMarket().equals(WatchlistMarket.normalize(request.market()))) {
             throw new IllegalArgumentException("Market cannot be changed when renaming a watchlist");
         }
-        watchlist.setName(request.name().trim());
+        String name = request.name().trim();
+        boolean nameTakenByAnother = findSameNamedWatchlist(watchlist.getUserId(), watchlist.getMarket(), name)
+                .filter(other -> !other.getId().equals(watchlist.getId()))
+                .isPresent();
+        if (nameTakenByAnother) {
+            throw new IllegalArgumentException("A watchlist named \"" + name + "\" already exists");
+        }
+        watchlist.setName(name);
         return toResponse(watchlistRepository.save(watchlist));
     }
 
@@ -202,6 +225,13 @@ public class WatchlistService {
                 .filter(market::isInstance)
                 .filter(found -> found.getUserId() != null && found.getUserId() == userId)
                 .orElseThrow(() -> new NoSuchElementException(WATCHLIST_NOT_FOUND));
+    }
+
+    /** The oldest of the user's watchlists in that market with this name, ignoring case. */
+    private Optional<WatchlistEntity> findSameNamedWatchlist(long userId, String market, String name) {
+        return watchlistRepository.findByUserIdAndMarketAndNameIgnoreCaseOrderByIdAsc(userId, market, name)
+                .stream()
+                .findFirst();
     }
 
     private WatchlistEntity findWatchlist(long id) {

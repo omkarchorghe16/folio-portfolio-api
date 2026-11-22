@@ -198,7 +198,7 @@
               "path": ["api", "v1", "watchlists", "import"],
               "query": [{"key": "market", "value": "{{importMarket}}"}, {"key": "userId", "value": "{{userId}}"}]
             },
-            "description": "Set importMarket to USA or India and userId to 1 for USA imports. Select the CSV file in Body > form-data > file after importing this collection. The API accepts USA (also US) or India."
+            "description": "Set importMarket to USA (or US) or India and userId to the owner. Select the CSV file in Body > form-data > file after importing this collection. Imports only add: a column named like one of the user's existing watchlists in that market adds its new symbols there and skips ones already present; other columns create new watchlists."
           }
         },
         {
