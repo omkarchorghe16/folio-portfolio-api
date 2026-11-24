@@ -118,8 +118,9 @@ Flyway applies `src/main/resources/db/migration`. Optional `dev` profile seeds t
 
 ## Docker Compose
 
-Docker Compose starts PostgreSQL and the API with a persistent database volume. The database is
-published only on host loopback port 5433; the API is available at `http://localhost:8081`.
+Docker Compose runs only the API, available at `http://localhost:8081`. It does not start PostgreSQL:
+the container connects to the shared `folio_pro` database on the Mac, so that server must be running
+(`brew services start postgresql@16`) and accept connections from Docker Desktop.
 
 ```bash
 cp .env.example .env
@@ -129,11 +130,10 @@ docker compose up --build -d
 docker compose ps
 ```
 
-The API container connects to `postgres:5432` over the Compose network. To run Spring Boot on the
-host against this Compose database, set `POSTGRES_URL=jdbc:postgresql://localhost:5433/folio_pro`;
-otherwise it uses the configured default `localhost:5432`. Stop the containers with
-`docker compose down`; use `docker compose down -v` only when you intend to delete the local
-database volume. Do not commit `.env` or put secrets in the Docker image.
+The API container connects to `host.docker.internal:${POSTGRES_HOST_PORT}` (default `5432`). Spring
+Boot run directly on the host uses the same database through the configured default
+`localhost:5432`. Stop the container with `docker compose down`; it never touches database data,
+because the database lives outside Compose. Do not commit `.env` or put secrets in the Docker image.
 
 Application controller/service invocation logs and exceptions are written to standard output.
 Follow container logs with `docker compose logs -f folio-pro-api`; set `APP_LOG_LEVEL=DEBUG` in

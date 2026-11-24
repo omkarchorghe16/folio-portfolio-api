@@ -57,7 +57,8 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 - Public API docs: OpenAPI annotations, `docs/API_ENDPOINTS.md`, `README.md` and
   `postman/Folio-Pro-API.postman_collection.json` (environment
   `postman/Folio-Pro-Local-and-Dev.postman_environment.json`).
-- Docker Compose (`docker compose up --build -d`, reads `.env`) runs the app and PostgreSQL. `k8s/`
+- Docker Compose (`docker compose up --build -d`, reads `.env`) runs only the app, which connects
+  to PostgreSQL on the Mac host through `host.docker.internal:5432`. `k8s/`
   and `scripts/deploy-local-k8s.sh` are optional, Docker Desktop only.
 - Secrets come from environment variables or the git-ignored `.env` (copy `.env.example`).
 

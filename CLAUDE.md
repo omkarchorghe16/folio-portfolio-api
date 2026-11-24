@@ -38,7 +38,7 @@ in `config/LoggingAspect`.
 ```bash
 mvn test                                         # H2 in-memory; Flyway is off in tests
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
-docker compose up --build -d                     # app + PostgreSQL, reads .env
+docker compose up --build -d                     # app only (PostgreSQL on the host), reads .env
 ```
 
 ## Things to know
