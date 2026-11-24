@@ -11,7 +11,7 @@ issues, captured with `spring.jpa.show-sql=true`).
 
 ## 1. Database overview
 
-Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V8). Hibernate runs with
+Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V13). Hibernate runs with
 `ddl-auto: validate`, so entities must match these tables exactly.
 
 | Table | Purpose | Key columns | Entity |
@@ -22,6 +22,10 @@ Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V8). Hibern
 | `watchlist_items_india` | Tickers in India watchlists | same shape, FK → `watchlists_india.id` | `IndiaWatchlistItemEntity` |
 | `portfolios` | Portfolios | `id`, `name`, `country`, `currency`, `asset_type`, `created_at`, `updated_at` | `PortfolioEntity` |
 | `holdings` | Positions in a portfolio | `portfolio_id` → `portfolios.id` ON DELETE CASCADE, `symbol`, `instrument_name`, `quantity`, `average_cost`, `market_value`, `currency`; UNIQUE(`portfolio_id`,`symbol`) | `HoldingEntity` |
+| `portfolio_entries_usa`, `portfolio_entries_india` | Monthly amounts per asset type, entered by hand | `id` identity, `user_id`, `country` (`US` / `India`, CHECK), `currency` (`USD` / `INR`, CHECK), `entry_month` (1st of month, CHECK), `asset_type` ≤40 (a default code or one of the user's `CUSTOM_…` codes, checked by the service), `sub_asset_type_id` (nullable, FK with `user_id` → `portfolio_sub_asset_types_*`), `invested_amount` ≥ 0, `current_value` ≥ 0, `created_at`, `updated_at`; UNIQUE NULLS NOT DISTINCT(`user_id`,`entry_month`,`asset_type`,`sub_asset_type_id`) | `UsaPortfolioEntryEntity`, `IndiaPortfolioEntryEntity` |
+| `portfolio_asset_types_usa`, `portfolio_asset_types_india` | A user's own asset types and renamed defaults | `id` identity, `user_id`, `country` (CHECK), `code` ≤40, `name` ≤60, `is_hidden` default false, `created_at`, `updated_at`; UNIQUE(`user_id`,`code`). Unchanged defaults have no row | `UsaPortfolioAssetTypeEntity`, `IndiaPortfolioAssetTypeEntity` |
+| `portfolio_sub_asset_types_usa`, `portfolio_sub_asset_types_india` | Many sub asset types per asset type | `id` identity, `user_id`, `country` (CHECK), `asset_type_id` NOT NULL, `code` ≤40, `name` ≤60, `is_hidden` default false, `created_at`, `updated_at`; FK(`user_id`,`asset_type_id`) → `portfolio_asset_types_*`(`user_id`,`id`); UNIQUE(`user_id`,`code`). A default asset type gets its row when its first sub asset type is added | `UsaPortfolioSubAssetTypeEntity`, `IndiaPortfolioSubAssetTypeEntity` |
+| `stock_holdings_usa`, `stock_holdings_india` | Stocks and ETFs held | `id` identity, `user_id`, `country`, `currency` (both CHECK), `symbol` ≤20, `exchange` (India only, `NSE`/`BSE`, default `NSE`), `name` ≤160, `asset_type` (`STOCK`/`ETF`), `quantity` > 0, `average_cost` ≥ 0, `created_at`, `updated_at`; UNIQUE(`user_id`,`symbol`), plus `exchange` for India | `UsaStockHoldingEntity`, `IndiaStockHoldingEntity` |
 | `watchlist_column_preferences` | Each user's watchlist table columns and their order | PK (`user_id`,`column_key`), `display_order` ≥ 1, UNIQUE(`user_id`,`display_order`), `created_at`, `updated_at` | `WatchlistColumnPreferenceEntity` |
 
 The legacy `user_preferences` table and its `/api/v1/preferences` endpoint were removed (V8).
@@ -413,7 +417,48 @@ Validation: 1–100 columns; `columnKey` matches `[A-Za-z0-9_]+` (≤ 50 chars) 
 
 ---
 
-## 5. Known issues / improvement notes
+## 5. Portfolio entries — `PortfolioEntryController`
+
+Base: `/api/v1/users/{userId}/portfolio-entries/{market}`. `market` is `US`, `USA` or `India` (any case) and selects
+the table. All amounts are in that table's currency.
+
+| Endpoint | What it does | Tables |
+|---|---|---|
+| `GET /summary` | Latest month's totals and asset lines, and `history` (oldest first). Nothing recorded: empty lists, no `latestMonth`/`totals` | SELECT all of the user's rows |
+| `GET /months/{yyyy-MM}` | The month's entries with `saved: true`. Otherwise `saved: false` with the entries of `sourceMonth`, the latest earlier month | 1–3 SELECTs |
+| `PUT /months/{yyyy-MM}` | Replaces the month in one transaction; asset types left out are deleted, an empty list clears it | SELECT, then UPDATE / INSERT / DELETE per row |
+
+Body: `{"entries":[{"assetType":"STOCKS","investedAmount":1400,"currentValue":1600}],
+"assetTypes":[{"assetType":"CUSTOM_0123456789ABCDEF0123456789ABCDEF","name":"401(k)"}]}`. `assetTypes` is optional and
+lists only new and renamed types; a new code is `CUSTOM_` and 32 hex digits chosen by the client, names are unique per
+user and country (any case), and codes never change. Sub asset types work the same way: `subAssetTypes` lists new and renamed ones as
+`{"subAssetType":"SUB_<32 hex>","assetType":"LAND","name":"Farm"}` (name unique within the asset type; it cannot move to
+another one), and an entry for one adds `"subAssetType":"SUB_…"`. Own and sub asset type entries for the same asset type
+in one month return 400. In the summary an asset's amounts are the total of its `subAssets`.
+Both take an optional `"hidden"` (left as it is when absent). There is no delete: hidden types keep the amounts of saved
+months and are left out of the suggestion for an unsaved month; a hidden asset type also leaves out its sub asset types.
+`GET /months` returns every type in `assetTypes` and `subAssetTypes`, and the summary
+returns each asset's `name`. Default asset types: `STOCKS`,
+`MUTUAL_FUNDS`, `ETFS`, `RESIDENTIAL_PROPERTY`, `COMMERCIAL_PROPERTY`, `LAND`, `REITS`, `BONDS_FIXED_INCOME`, `CASH`,
+`CRYPTO`, `GOLD_COMMODITIES`. Amounts are ≥ 0 with at most 2 decimals. A future month, duplicate or unknown asset type
+returns 400. `investedAmount` is the total cost still held. `profit` = value − invested; `monthlyReturnPercent` =
+change in profit ÷ previous calendar month's value. A percentage with a zero denominator or no previous month is absent.
+
+## 6. Stock holdings — `StockHoldingController`
+
+Base: `/api/v1/users/{userId}/stock-holdings/{market}`. Prices are not stored here; clients read them from
+folio-market-feed-svc by `symbol` (US, `fmp_stock_profiles`) or `symbol` + `exchange` (India, `upstox_stock_quotes`).
+
+| Endpoint | What it does |
+|---|---|
+| `GET` | All holdings by symbol |
+| `POST` | Add `{symbol,name,assetType,quantity,averageCost}`; 201, or 409 if already held. India: `.NS`/`.BO` is removed. US symbols must match what FMP accepts (`[A-Z0-9][A-Z0-9.-]{0,19}`), else 400 |
+| `PUT /{id}` | Change `{quantity,averageCost}`; 404 if not the user's holding in that market |
+| `DELETE /{id}` | Remove; 204, or 404 |
+
+---
+
+## 7. Known issues / improvement notes
 
 1. **Unknown routes return 500, not 404.** A request to a path with no endpoint (for example
    `PATCH /api/v1/watchlists/1/favorite` on a build that predates it) reaches the generic 500 handler

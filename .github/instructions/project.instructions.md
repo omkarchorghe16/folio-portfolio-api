@@ -37,7 +37,8 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
   or a cross-market foreign key.
 - The `folio_pro` database is shared with `../folio-market-feed-svc`, which creates its own tables in
   the same `public` schema through Hibernate. This service owns `portfolios`, `holdings`,
-  `watchlists_*`, `watchlist_items_*` and `user_preferences`.
+  `portfolio_entries_*`, `portfolio_asset_types_*`, `portfolio_sub_asset_types_*`, `stock_holdings_*`, `watchlists_*`, `watchlist_items_*` and
+  `watchlist_column_preferences`.
 
 ## Logging
 

@@ -44,6 +44,10 @@ See [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) for a per-endpoint reference,
 | DELETE | `/watchlists/india/{id}/items/{symbol}?userId=1` | Remove one stock from an India watchlist owned by the user (204). 404 for a USA list, another user's list, or a symbol not in the list |
 | POST | `/watchlists/us/{id}/items?userId=1` | Same as the India bulk-add, into `watchlist_items_usa`; 404 for an India list or another user's list |
 | DELETE | `/watchlists/us/{id}/items/{symbol}?userId=1` | Remove one stock from a USA watchlist owned by the user (204); 404 otherwise |
+| GET | `/users/{userId}/portfolio-entries/{market}/summary` | Totals, per-asset lines and allocation of the latest recorded month, and every month's totals |
+| GET, PUT | `/users/{userId}/portfolio-entries/{market}/months/{yyyy-MM}` | One month's invested amount and value per asset type. GET suggests the latest earlier month when the month is not saved and lists the user's asset types; PUT replaces the month and, with the optional `assetTypes` and `subAssetTypes`, adds, renames, hides or shows asset types and their sub asset types in the same transaction |
+| GET, POST | `/users/{userId}/stock-holdings/{market}` | List / add held stocks and ETFs (201; 409 if already held) |
+| PUT, DELETE | `/users/{userId}/stock-holdings/{market}/{id}` | Change quantity and average cost / remove (204) |
 | GET, PUT | `/users/{userId}/watchlist-column-preferences` | The user's watchlist table columns and order (GET returns 404 until first saved) |
 
 Watchlist items contain `symbol`, `name`, and `isFavorite` (false by default). These items are only for symbol tracking/favorites; market quote and technical data are not stored in these tables. USA items are stored in `watchlist_items_usa` and reference `watchlists_usa`; India items are stored in `watchlist_items_india` and reference `watchlists_india`. Portfolio holdings include `symbol`, `instrument`, `quantity`, `averageCost`, `marketValue`, and `currency`.

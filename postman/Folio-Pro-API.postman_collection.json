@@ -404,6 +404,219 @@
       ]
     },
     {
+      "name": "Portfolio entries",
+      "item": [
+        {
+          "name": "Get portfolio summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/portfolio-entries/US/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}",
+                "portfolio-entries",
+                "US",
+                "summary"
+              ]
+            },
+            "description": "Replace US with India for the India tables."
+          }
+        },
+        {
+          "name": "Get one month",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/portfolio-entries/US/months/2026-11",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}",
+                "portfolio-entries",
+                "US",
+                "months",
+                "2026-11"
+              ]
+            },
+            "description": "saved is false when the entries are only a suggestion."
+          }
+        },
+        {
+          "name": "Replace one month",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entries\": [\n    {\n      \"assetType\": \"STOCKS\",\n      \"investedAmount\": 1400,\n      \"currentValue\": 1600\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/portfolio-entries/US/months/2026-11",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}",
+                "portfolio-entries",
+                "US",
+                "months",
+                "2026-11"
+              ]
+            },
+            "description": "Replaces the whole month; asset types left out are deleted."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stock holdings",
+      "item": [
+        {
+          "name": "List stock holdings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/stock-holdings/US",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}",
+                "stock-holdings",
+                "US"
+              ]
+            },
+            "description": "Replace US with India for the India table."
+          }
+        },
+        {
+          "name": "Add stock holding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symbol\": \"AAPL\",\n  \"name\": \"Apple Inc.\",\n  \"assetType\": \"STOCK\",\n  \"quantity\": 10,\n  \"averageCost\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/stock-holdings/US",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}",
+                "stock-holdings",
+                "US"
+              ]
+            },
+            "description": "409 if already held."
+          }
+        },
+        {
+          "name": "Update stock holding",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 12,\n  \"averageCost\": 155.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/stock-holdings/US/{{holdingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}",
+                "stock-holdings",
+                "US",
+                "{{holdingId}}"
+              ]
+            },
+            "description": "Changes quantity and average cost."
+          }
+        },
+        {
+          "name": "Delete stock holding (destructive)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/stock-holdings/US/{{holdingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}",
+                "stock-holdings",
+                "US",
+                "{{holdingId}}"
+              ]
+            },
+            "description": "Removes the holding."
+          }
+        }
+      ]
+    },
+    {
       "name": "Watchlist column preferences",
       "item": [
         {
@@ -443,6 +656,7 @@
   "variable": [
     {"key": "baseUrl", "value": "http://localhost:8081"},
     {"key": "watchlistId", "value": "1"},
+    { "key": "holdingId", "value": "1" },
     {"key": "portfolioId", "value": "1"},
     {"key": "symbol", "value": "AAPL"},
     {"key": "userId", "value": "1"}
