@@ -13,7 +13,7 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** One stock or ETF a user holds: total quantity and average cost per share. Prices are not stored here. */
+/** One stock or ETF a user holds: total quantity (if known) and average cost per share. Prices are not stored here. */
 @MappedSuperclass
 public abstract class StockHoldingEntity {
     @Id
@@ -40,11 +40,16 @@ public abstract class StockHoldingEntity {
     @Column(name = "asset_type", nullable = false, length = 10)
     private StockHoldingAssetType assetType;
 
-    @Column(nullable = false, precision = 24, scale = 8)
+    /** Null when the user does not know it. */
+    @Column(precision = 24, scale = 8)
     private BigDecimal quantity;
 
     @Column(name = "average_cost", nullable = false, precision = 20, scale = 6)
     private BigDecimal averageCost;
+
+    /** Sector name picked by the user, or null. */
+    @Column(length = 100)
+    private String sector;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -73,6 +78,8 @@ public abstract class StockHoldingEntity {
     public void setAssetType(StockHoldingAssetType assetType) { this.assetType = assetType; }
     public BigDecimal getQuantity() { return quantity; }
     public BigDecimal getAverageCost() { return averageCost; }
+    public String getSector() { return sector; }
+    public void setSector(String sector) { this.sector = sector; }
 
     public void setPosition(BigDecimal quantity, BigDecimal averageCost) {
         this.quantity = quantity;

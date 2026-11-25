@@ -63,6 +63,7 @@ public class StockHoldingService {
                                                       StockHoldingPositionRequest request) {
         StockHoldingEntity holding = findHolding(repositoryOf(market), userId, id);
         holding.setPosition(request.quantity(), request.averageCost());
+        holding.setSector(normalizeSector(request.sector()));
         return toResponse(holding);
     }
 
@@ -83,6 +84,7 @@ public class StockHoldingService {
         holding.setName(request.name().trim());
         holding.setAssetType(request.assetType());
         holding.setPosition(request.quantity(), request.averageCost());
+        holding.setSector(normalizeSector(request.sector()));
         try {
             return toResponse(repository.saveAndFlush(holding));
         } catch (DataIntegrityViolationException exception) {
@@ -119,6 +121,11 @@ public class StockHoldingService {
         return symbol;
     }
 
+    /** Null when the sector is missing or blank. */
+    private static String normalizeSector(String sector) {
+        return sector == null || sector.isBlank() ? null : sector.trim();
+    }
+
     private static ResponseStatusException alreadyHeld(String symbol) {
         return new ResponseStatusException(HttpStatus.CONFLICT, symbol + " is already in your holdings");
     }
@@ -126,6 +133,6 @@ public class StockHoldingService {
     private static StockHoldingResponse toResponse(StockHoldingEntity holding) {
         return new StockHoldingResponse(holding.getId(), holding.getUserId(), holding.getCountry(),
                 holding.getCurrency(), holding.getSymbol(), holding.getExchange(), holding.getName(),
-                holding.getAssetType(), holding.getQuantity(), holding.getAverageCost());
+                holding.getAssetType(), holding.getQuantity(), holding.getAverageCost(), holding.getSector());
     }
 }

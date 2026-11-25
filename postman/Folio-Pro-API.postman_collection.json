@@ -530,7 +530,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"symbol\": \"AAPL\",\n  \"name\": \"Apple Inc.\",\n  \"assetType\": \"STOCK\",\n  \"quantity\": 10,\n  \"averageCost\": 150\n}",
+              "raw": "{\n  \"symbol\": \"AAPL\",\n  \"name\": \"Apple Inc.\",\n  \"assetType\": \"STOCK\",\n  \"quantity\": 10,\n  \"averageCost\": 150,\n  \"sector\": \"Hardware tech\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -566,7 +566,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"quantity\": 12,\n  \"averageCost\": 155.5\n}",
+              "raw": "{\n  \"quantity\": 12,\n  \"averageCost\": 155.5,\n  \"sector\": \"Hardware tech\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

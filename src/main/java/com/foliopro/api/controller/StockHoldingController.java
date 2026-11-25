@@ -41,7 +41,8 @@ public class StockHoldingController {
     }
 
     @Operation(summary = "Add a stock holding",
-            description = "India symbols are NSE symbols; a .NS or .BO suffix is removed. 409 if already held.")
+            description = "India symbols are NSE symbols; a .NS or .BO suffix is removed. Quantity is optional. "
+                    + "409 if already held.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public StockHoldingResponse createHolding(@PathVariable @Positive Long userId, @PathVariable String market,
@@ -49,7 +50,8 @@ public class StockHoldingController {
         return stockHoldingService.createHolding(userId, market, request);
     }
 
-    @Operation(summary = "Change a holding's quantity and average cost")
+    @Operation(summary = "Change a holding's quantity, average cost and sector",
+            description = "Replaces all three; without a quantity or sector the holding has none.")
     @PutMapping("/{id}")
     public StockHoldingResponse updateHoldingPosition(@PathVariable @Positive Long userId,
                                                       @PathVariable String market, @PathVariable @Positive Long id,

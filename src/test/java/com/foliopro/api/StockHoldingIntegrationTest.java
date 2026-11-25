@@ -103,6 +103,42 @@ class StockHoldingIntegrationTest {
     }
 
     @Test
+    void savesChangesAndClearsTheSector() throws Exception {
+        long id = idOf(mvc.perform(post(BASE, 1, "India").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"symbol\":\"TCS\",\"name\":\"TCS\",\"assetType\":\"STOCK\",\"quantity\":1,"
+                                + "\"averageCost\":3000,\"sector\":\" Software IT \"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sector").value("Software IT")));
+        putSector(id, "\"Software IT Services\"").andExpect(status().isOk());
+        mvc.perform(get(BASE, 1, "India")).andExpect(jsonPath("$[0].sector").value("Software IT Services"));
+        putSector(id, "\" \"").andExpect(status().isOk()).andExpect(jsonPath("$.sector").doesNotExist());
+        putSector(id, "\"" + "x".repeat(101) + "\"").andExpect(status().isBadRequest());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM stock_holdings_india WHERE sector IS NULL",
+                Integer.class));
+    }
+
+    private ResultActions putSector(long id, String sectorJson) throws Exception {
+        return mvc.perform(put(ONE, 1, "India", id).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"quantity\":1,\"averageCost\":3000,\"sector\":" + sectorJson + "}"));
+    }
+
+    @Test
+    void quantityIsOptionalInBothMarkets() throws Exception {
+        for (String market : new String[] {"US", "India"}) {
+            long id = idOf(postHolding(1, market, "ABC", "STOCK", "null", "50").andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.quantity").doesNotExist())
+                    .andExpect(jsonPath("$.averageCost").value(50)));
+            putPosition(1, market, id, "4", "50").andExpect(status().isOk()).andExpect(jsonPath("$.quantity").value(4));
+            putPosition(1, market, id, "null", "50").andExpect(status().isOk())
+                    .andExpect(jsonPath("$.quantity").doesNotExist());
+            putPosition(1, market, id, "0", "50").andExpect(status().isBadRequest());
+        }
+        mvc.perform(post(BASE, 1, "US").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"symbol\":\"XYZ\",\"name\":\"X\",\"assetType\":\"ETF\",\"averageCost\":1}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void invalidRequestsReturn400() throws Exception {
         postHolding(1, "US", "ABR$D", "STOCK", "1", "1").andExpect(status().isBadRequest());
         postHolding(1, "India", "A B", "STOCK", "1", "1").andExpect(status().isBadRequest());

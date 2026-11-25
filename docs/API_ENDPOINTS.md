@@ -11,7 +11,7 @@ issues, captured with `spring.jpa.show-sql=true`).
 
 ## 1. Database overview
 
-Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V13). Hibernate runs with
+Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V15). Hibernate runs with
 `ddl-auto: validate`, so entities must match these tables exactly.
 
 | Table | Purpose | Key columns | Entity |
@@ -25,7 +25,7 @@ Schema is managed by Flyway (`src/main/resources/db/migration`, V1–V13). Hiber
 | `portfolio_entries_usa`, `portfolio_entries_india` | Monthly amounts per asset type, entered by hand | `id` identity, `user_id`, `country` (`US` / `India`, CHECK), `currency` (`USD` / `INR`, CHECK), `entry_month` (1st of month, CHECK), `asset_type` ≤40 (a default code or one of the user's `CUSTOM_…` codes, checked by the service), `sub_asset_type_id` (nullable, FK with `user_id` → `portfolio_sub_asset_types_*`), `invested_amount` ≥ 0, `current_value` ≥ 0, `created_at`, `updated_at`; UNIQUE NULLS NOT DISTINCT(`user_id`,`entry_month`,`asset_type`,`sub_asset_type_id`) | `UsaPortfolioEntryEntity`, `IndiaPortfolioEntryEntity` |
 | `portfolio_asset_types_usa`, `portfolio_asset_types_india` | A user's own asset types and renamed defaults | `id` identity, `user_id`, `country` (CHECK), `code` ≤40, `name` ≤60, `is_hidden` default false, `created_at`, `updated_at`; UNIQUE(`user_id`,`code`). Unchanged defaults have no row | `UsaPortfolioAssetTypeEntity`, `IndiaPortfolioAssetTypeEntity` |
 | `portfolio_sub_asset_types_usa`, `portfolio_sub_asset_types_india` | Many sub asset types per asset type | `id` identity, `user_id`, `country` (CHECK), `asset_type_id` NOT NULL, `code` ≤40, `name` ≤60, `is_hidden` default false, `created_at`, `updated_at`; FK(`user_id`,`asset_type_id`) → `portfolio_asset_types_*`(`user_id`,`id`); UNIQUE(`user_id`,`code`). A default asset type gets its row when its first sub asset type is added | `UsaPortfolioSubAssetTypeEntity`, `IndiaPortfolioSubAssetTypeEntity` |
-| `stock_holdings_usa`, `stock_holdings_india` | Stocks and ETFs held | `id` identity, `user_id`, `country`, `currency` (both CHECK), `symbol` ≤20, `exchange` (India only, `NSE`/`BSE`, default `NSE`), `name` ≤160, `asset_type` (`STOCK`/`ETF`), `quantity` > 0, `average_cost` ≥ 0, `created_at`, `updated_at`; UNIQUE(`user_id`,`symbol`), plus `exchange` for India | `UsaStockHoldingEntity`, `IndiaStockHoldingEntity` |
+| `stock_holdings_usa`, `stock_holdings_india` | Stocks and ETFs held | `id` identity, `user_id`, `country`, `currency` (both CHECK), `symbol` ≤20, `exchange` (India only, `NSE`/`BSE`, default `NSE`), `name` ≤160, `asset_type` (`STOCK`/`ETF`), `quantity` > 0 or null (not known), `average_cost` ≥ 0, `sector` ≤100 (name, nullable), `created_at`, `updated_at`; UNIQUE(`user_id`,`symbol`), plus `exchange` for India | `UsaStockHoldingEntity`, `IndiaStockHoldingEntity` |
 | `watchlist_column_preferences` | Each user's watchlist table columns and their order | PK (`user_id`,`column_key`), `display_order` ≥ 1, UNIQUE(`user_id`,`display_order`), `created_at`, `updated_at` | `WatchlistColumnPreferenceEntity` |
 
 The legacy `user_preferences` table and its `/api/v1/preferences` endpoint were removed (V8).
@@ -452,8 +452,8 @@ folio-market-feed-svc by `symbol` (US, `fmp_stock_profiles`) or `symbol` + `exch
 | Endpoint | What it does |
 |---|---|
 | `GET` | All holdings by symbol |
-| `POST` | Add `{symbol,name,assetType,quantity,averageCost}`; 201, or 409 if already held. India: `.NS`/`.BO` is removed. US symbols must match what FMP accepts (`[A-Z0-9][A-Z0-9.-]{0,19}`), else 400 |
-| `PUT /{id}` | Change `{quantity,averageCost}`; 404 if not the user's holding in that market |
+| `POST` | Add `{symbol,name,assetType,quantity?,averageCost,sector?}` (sector: name, at most 100 characters); 201, or 409 if already held. India: `.NS`/`.BO` is removed. US symbols must match what FMP accepts (`[A-Z0-9][A-Z0-9.-]{0,19}`), else 400 |
+| `PUT /{id}` | Replace `{quantity?,averageCost,sector?}` (left out: cleared); 404 if not the user's holding in that market |
 | `DELETE /{id}` | Remove; 204, or 404 |
 
 ---
