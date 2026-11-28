@@ -1,0 +1,155 @@
+name: Java CI, Docker Build, and Kubernetes Deploy
+
+# Same pipeline as folio-market-feed-svc.
+# Every push and pull request: compile, run the tests (H2, no database needed) and build the Docker image.
+# Pushes to main and manual runs: also publish the image to GHCR (<commit sha> and latest).
+# Deploy to a Kubernetes cluster only when the repository variable KUBE_DEPLOY_ENABLED is "true" and the
+# KUBE_CONFIG and APP_SECRETS_ENV secrets are set. GitHub-hosted runners cannot reach Docker Desktop on a Mac;
+# deploy locally with scripts/deploy-local-k8s.sh (or ../folio-pro-ui/scripts/folio-pro.sh) instead.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '21'
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Compile application
+        run: mvn --batch-mode -DskipTests package
+
+  tests:
+    name: Tests and Docker image
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run unit and integration tests
+        run: mvn --batch-mode package
+
+      - name: Build Docker image
+        run: docker build --tag "folio-pro-api:${GITHUB_SHA}" .
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  publish:
+    name: Publish image to GHCR
+    runs-on: ubuntu-latest
+    needs: tests
+    # Only main (and manual runs) publish, so a feature branch never replaces the latest tag.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set image name
+        id: image
+        run: echo "name=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The multi-stage Dockerfile runs the Maven build itself.
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: publish
+    # Off unless Settings > Secrets and variables > Actions > Variables has KUBE_DEPLOY_ENABLED = true.
+    if: vars.KUBE_DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    environment: production
+    steps:
+      - name: Check deployment secrets
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+          APP_SECRETS_ENV: ${{ secrets.APP_SECRETS_ENV }}
+        run: |
+          missing=""
+          test -n "$KUBE_CONFIG" || missing="$missing KUBE_CONFIG"
+          test -n "$APP_SECRETS_ENV" || missing="$missing APP_SECRETS_ENV"
+          if [ -n "$missing" ]; then
+            echo "::error::KUBE_DEPLOY_ENABLED is true but these secrets are not set:$missing"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v5
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      # APP_SECRETS_ENV holds the same KEY=value lines as the local application-k8s.env:
+      # POSTGRES_URL, POSTGRES_USER, POSTGRES_PASSWORD and optionally FRONTEND_ORIGIN.
+      - name: Create application secret
+        env:
+          APP_SECRETS_ENV: ${{ secrets.APP_SECRETS_ENV }}
+        run: |
+          kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
+          printf '%s\n' "$APP_SECRETS_ENV" > "$RUNNER_TEMP/application-k8s.env"
+          kubectl create secret generic folio-pro-secrets \
+            --namespace dev \
+            --from-env-file="$RUNNER_TEMP/application-k8s.env" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/service.yaml -f k8s/ingress.yaml
+          sed "s|folio-pro-api:REPLACE_WITH_LOCAL_TAG|${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${{ github.sha }}|" k8s/deployment.yaml | kubectl apply -f -
+          kubectl rollout status --namespace dev deployment/folio-pro-api --timeout=180s

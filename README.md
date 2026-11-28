@@ -165,10 +165,30 @@ bash scripts/deploy-local-k8s.sh local
 Set `APP_SECRETS_FILE` to use a different env file. The script refuses to deploy unless the active
 Kubernetes context is `docker-desktop`, the image exists locally, and the env file is present. It
 creates/updates a Kubernetes Secret from that ignored env file and verifies readiness. No cloud
-deployment or registry publishing is configured. `bash scripts/deploy-local-k8s.sh` in
+cluster is configured for the GitHub Actions deploy (see below). `bash scripts/deploy-local-k8s.sh` in
 `../folio-pro-ui` builds and deploys this API, folio-market-feed-svc and the UI together, using this
 script and this `application-k8s.env`. Behind the UI's nginx all calls are same-origin, so
 `FRONTEND_ORIGIN` only matters for direct calls to the API.
+
+## CI/CD (GitHub Actions)
+
+`.github/workflows/ci-cd.yml` matches the folio-market-feed-svc pipeline and runs on every push, pull request and
+manual run:
+
+| Job | Runs on | Does |
+|---|---|---|
+| Build | every run | `mvn -DskipTests package` |
+| Tests and Docker image | every run | `mvn package` (all tests, H2, no database) and `docker build`; uploads the Surefire reports |
+| Publish image to GHCR | pushes to `main`, manual runs | builds and pushes `ghcr.io/omkarchorghe16/folio-portfolio-api:<sha>` and `:latest` |
+| Deploy to Kubernetes | only when enabled (below) | applies `k8s/` with the published image to the `dev` namespace |
+
+Deployment is off by default: GitHub's runners cannot reach Docker Desktop on a Mac, so local clusters are deployed
+with `scripts/deploy-local-k8s.sh`. To deploy to a remote cluster, add under **Settings → Secrets and variables →
+Actions** the variable `KUBE_DEPLOY_ENABLED` = `true`, the secret `KUBE_CONFIG` (kubeconfig contents with permission to
+manage the `dev` namespace) and the secret `APP_SECRETS_ENV` (the same `KEY=value` lines as `application-k8s.env`:
+`POSTGRES_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, optionally `FRONTEND_ORIGIN`). The job fails with a message if
+a secret is missing. The cluster must be able to pull the GHCR image (public package or an image pull secret), and
+`POSTGRES_URL` must point at a database it can reach.
 
 ## Engineering conventions
 
