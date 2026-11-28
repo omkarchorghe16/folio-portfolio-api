@@ -1,8 +1,6 @@
 .git
 .idea
-target/*
-!target/
-!target/folio-pro-api-*.jar
+target
 .env
 .env.*
 application-secrets.yml

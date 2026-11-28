@@ -129,14 +129,17 @@ the container connects to the shared `folio_pro` database on the Mac, so that se
 ```bash
 cp .env.example .env
 # Set POSTGRES_PASSWORD to a local-only value in the ignored .env file.
-mvn -DskipTests package
 docker compose up --build -d
 docker compose ps
 ```
 
 The API container connects to `host.docker.internal:${POSTGRES_HOST_PORT}` (default `5432`). Spring
 Boot run directly on the host uses the same database through the configured default
-`localhost:5432`. Stop the container with `docker compose down`; it never touches database data,
+`localhost:5432`. The image builds the jar itself (multi-stage `Dockerfile`), so no local JDK or
+Maven is needed and there is no stale `target/` jar to rebuild first.
+
+To run this API together with the UI and folio-market-feed-svc, use `docker compose up --build -d`
+in `../folio-pro-ui` (http://localhost:8080); it includes this `compose.yaml` and reads this `.env`. Stop the container with `docker compose down`; it never touches database data,
 because the database lives outside Compose. Do not commit `.env` or put secrets in the Docker image.
 
 Application controller/service invocation logs and exceptions are written to standard output.
@@ -148,12 +151,11 @@ the existing sanitized 500 response.
 ## Optional Docker Desktop Kubernetes
 
 The `k8s/` manifests and `scripts/deploy-local-k8s.sh` provide a local-only Docker Desktop
-deployment. Build the image first, create an ignored `application-k8s.env` with database connection
+deployment. Build the image first (`docker build`, no Maven step needed), create an ignored `application-k8s.env` with database connection
 values reachable from Docker Desktop Kubernetes (for a Mac-hosted PostgreSQL instance,
 `POSTGRES_URL=jdbc:postgresql://host.docker.internal:5432/folio_pro`), and deploy with:
 
 ```bash
-mvn -DskipTests package
 docker build -t folio-pro-api:local .
 # Store POSTGRES_URL, POSTGRES_USER, POSTGRES_PASSWORD, and FRONTEND_ORIGIN in
 # application-k8s.env (KEY=value, one per line); this file is ignored by git.
@@ -163,7 +165,10 @@ bash scripts/deploy-local-k8s.sh local
 Set `APP_SECRETS_FILE` to use a different env file. The script refuses to deploy unless the active
 Kubernetes context is `docker-desktop`, the image exists locally, and the env file is present. It
 creates/updates a Kubernetes Secret from that ignored env file and verifies readiness. No cloud
-deployment or registry publishing is configured.
+deployment or registry publishing is configured. `bash scripts/deploy-local-k8s.sh` in
+`../folio-pro-ui` builds and deploys this API, folio-market-feed-svc and the UI together, using this
+script and this `application-k8s.env`. Behind the UI's nginx all calls are same-origin, so
+`FRONTEND_ORIGIN` only matters for direct calls to the API.
 
 ## Engineering conventions
 

@@ -59,8 +59,12 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
   `postman/Folio-Pro-API.postman_collection.json` (environment
   `postman/Folio-Pro-Local-and-Dev.postman_environment.json`).
 - Docker Compose (`docker compose up --build -d`, reads `.env`) runs only the app, which connects
-  to PostgreSQL on the Mac host through `host.docker.internal:5432`. `k8s/`
-  and `scripts/deploy-local-k8s.sh` are optional, Docker Desktop only.
+  to PostgreSQL on the Mac host through `host.docker.internal:5432`. The `Dockerfile` is multi-stage and
+  builds the jar itself. `k8s/` and `scripts/deploy-local-k8s.sh` are optional, Docker Desktop only.
+- `../folio-pro-ui` runs this API with the UI and folio-market-feed-svc: its `compose.yaml` includes this
+  `compose.yaml` (service name `folio-pro-api`) and its `scripts/deploy-local-k8s.sh` calls this repository's
+  script (Service `folio-pro-api` in namespace `dev`). Keep those names, or update the UI repository's nginx
+  routing (`docker/nginx.conf.template`, `k8s/deployment.yaml`) with them.
 - Secrets come from environment variables or the git-ignored `.env` (copy `.env.example`).
 
 ## Before finishing
