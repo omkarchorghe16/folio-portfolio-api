@@ -61,6 +61,9 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 - Docker Compose (`docker compose up --build -d`, reads `.env`) runs only the app, which connects
   to PostgreSQL on the Mac host through `host.docker.internal:5432`. The `Dockerfile` is multi-stage and
   builds the jar itself. `k8s/` and `scripts/deploy-local-k8s.sh` are optional, Docker Desktop only.
+- `.github/workflows/ci-cd.yml` tests and builds the image on every push and pull request, publishes it to GHCR
+  from `main`, and deploys only when the repository variable `KUBE_DEPLOY_ENABLED` is `true` (secrets
+  `KUBE_CONFIG`, `APP_SECRETS_ENV`). `../folio-market-feed-svc` has the same workflow; keep them alike.
 - `../folio-pro-ui` runs this API with the UI and folio-market-feed-svc: its `compose.yaml` includes this
   `compose.yaml` (service name `folio-pro-api`) and its `scripts/deploy-local-k8s.sh` calls this repository's
   script (Service `folio-pro-api` in namespace `dev`). Keep those names, or update the UI repository's nginx
